@@ -16,6 +16,8 @@
       <span id="info">Loading. Please wait.</span>
     </div>
 
+    <script src="star-agent.js"></script>
+
     <script type="x-shader/x-vertex" id="vertexshader">
       varying vec2 vUv;
       void main() {
@@ -453,6 +455,7 @@
       await nlx();
       await oao();
       await rzk();
+      StarAgent.init({ scene: ctn, camera: dam, controls: crw, stars: far, names: ghb });
       naj();
       function naj() {
         setTimeout(function () {
@@ -792,6 +795,7 @@
         wup();
       };
       function rmv(rxq) {
+        StarAgent.notifyStarClick(rxq);
         var rny = crw.target.x,
           rqj = crw.target.y,
           rsp = crw.target.z,
