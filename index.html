@@ -50,8 +50,6 @@
       import { UnrealBloomPass } from "./jsm/postprocessing/UnrealBloomPass.js";
       const zyw =
         "Welcome to the vicinity of the Sun. Switch to exploratory mode to study the mechanics of the model or navigate between stars in free mode.";
-      const zxa =
-        "Your support is always welcome: bitcoin:bc1qn84vf2q68j78vxjmwjq87m8qhcxkhvtvfucca8";
       const ztf = "Your feedback is always welcome: jeffrey3829@proton.me";
       const zqi =
         "Stars brightness and size not to scale. Do not consider as a source of reliable data. Please use Chrome for a better experience. This model has made use of the SIMBAD database, CDS, Strasbourg Astronomical Observatory, France.";
@@ -399,7 +397,7 @@
         this.setValue("");
       });
       mcr
-        .add(params, "Info", ["None", "About", "Feedback", "Support"])
+        .add(params, "Info", ["None", "About", "Feedback"])
         .onChange(function (value) {
           switch (value) {
             case "None":
@@ -414,9 +412,6 @@
               break;
             case "Feedback":
               ukm(ztf);
-              break;
-            case "Support":
-              ukm(zxa);
               break;
           }
         });
