@@ -17,6 +17,7 @@
     </div>
 
     <script src="star-agent.js"></script>
+    <script src="star-visuals.js" type="module"></script>
 
     <script type="x-shader/x-vertex" id="vertexshader">
       varying vec2 vUv;
@@ -879,6 +880,7 @@
               ctn.add(sqj);
             }
             ush(fwk, true);
+            StarVisuals.init({ scene: ctn, camera: dam, controls: crw, stars: ems });
           })
           .catch((e) => console.error(e));
         pdu(true);
@@ -948,10 +950,10 @@
       }
       function tby(tdr) {
         var teo = tdr.split("|"),
-          tfx = wnu(teo[3]),
+          tfx = plxToLy(teo[3]),
           tgz = teo[2].split(" "),
-          tii = wrb(tgz[0]),
-          tjd = wrb(tgz[1]);
+          tii = degreesToRad(tgz[0]),
+          tjd = degreesToRad(tgz[1]);
         return new THREE.Vector3().setFromSphericalCoords(
           tfx,
           Math.PI / 2 - tjd,
@@ -966,15 +968,15 @@
         tpm.setHex(ncn(tts));
         var tuv = new THREE.MeshBasicMaterial({ color: tpm }),
           twd = new THREE.Mesh(hpj, tuv),
-          txk = wnu(tmg[3]);
+          txk = plxToLy(tmg[3]);
         if (tmg[0] === "Sun") {
           txk = 0.0;
           gbt = twd;
           fwk = twd;
         }
         var tzb = tmg[2].split(" "),
-          uao = wrb(tzb[0]),
-          ubs = wrb(tzb[1]);
+          uao = degreesToRad(tzb[0]),
+          ubs = degreesToRad(tzb[1]);
         twd.position.setFromSphericalCoords(txk, Math.PI / 2 - ubs, uao);
         twd.name = trt;
         var ucx = ghb.find((ufu) => ufu.code == trt);
@@ -1133,7 +1135,7 @@
               var wcz = vxv[0];
               for (let wef of vxv) {
                 if (wcz != wef && wcz.pzd == wef.pzd) {
-                  wgo(wcz, wef);
+                  swapConsOnInit(wcz, wef);
                   vxv = vxv.filter((label) => label.pzd != wcz.pzd);
                 }
               }
@@ -1141,18 +1143,18 @@
           })
           .catch((e) => console.error(e));
       }
-      function wgo(wjx, wlz) {
-        var wim = wjx.position.clone();
-        wjx.position.copy(wlz.position);
-        wlz.position.copy(wim);
-        wjx.lookAt(0.0, 0.0, 0.0);
-        wlz.lookAt(0.0, 0.0, 0.0);
+      function swapConsOnInit(first, second) {
+        var position = first.position.clone();
+        first.position.copy(second.position);
+        second.position.copy(position);
+        first.lookAt(0.0, 0.0, 0.0);
+        second.lookAt(0.0, 0.0, 0.0);
       }
-      function wnu(wpf) {
-        return 3261.56 / wpf;
+      function plxToLy(plx) {
+        return 3261.56 / plx;
       }
-      function wrb(wsc) {
-        return (wsc * Math.PI) / 180.0;
+      function degreesToRad(degrees) {
+        return (degrees * Math.PI) / 180.0;
       }
       function wtk(obj) {
         if (obj.material) {
@@ -1160,6 +1162,7 @@
         }
       }
       function wup() {
+        StarVisuals.update();
         if (dkk == nax.mzz) {
           var wvv = ieq[dzv],
             wxb = ihm[dzv],
