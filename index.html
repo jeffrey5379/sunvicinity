@@ -49,18 +49,17 @@
       import { RenderPass } from "./jsm/postprocessing/RenderPass.js";
       import { ShaderPass } from "./jsm/postprocessing/ShaderPass.js";
       import { UnrealBloomPass } from "./jsm/postprocessing/UnrealBloomPass.js";
-      const WELCOME_MESSAGE =
-        "Welcome to the vicinity of the Sun. Switch to exploratory mode to study the mechanics of the model or navigate between stars in free mode.";
-      const ztf = "Your feedback is always welcome: jeffrey3829@proton.me";
-      const zqi =
-        "Stars brightness and size not to scale. Do not consider as a source of reliable data. Please use Chrome for a better experience. This model has made use of the SIMBAD database, CDS, Strasbourg Astronomical Observatory, France.";
+      
+      const WELCOME_MESSAGE = "Welcome to the vicinity of the Sun. Switch to exploratory mode to study the mechanics of the model or navigate between stars in free mode.";
+      const FEEDBACK_MESSAGE = "Your feedback is always welcome: jeffrey3829@proton.me";
+      const ABOUT_MESSAGE = "Stars brightness and size not to scale. Do not consider as a source of reliable data. Please use Chrome for a better experience. This model has made use of the SIMBAD database, CDS, Strasbourg Astronomical Observatory, France.";
       const CONS_STAGE = "Looks like some constellations names are misplaced. Will you be able to find pairs of incorrectly named constellations? Click the constellations names which are out of place.";
-      const zlq = "        Well done! Let's put them in their place.";
-      const pnn = "                  No,these two are in place.";
-      const pir = "            One of these two is misplaced. Take a closer look.";
-      const pcf = "Hooray! Now all constellations are in place. The setting to hide/show constellations is available now.";
+      const CONS_HIT = "        Well done! Let's put them in their place.";
+      const CONS_MISS = "                  No,these two are in place.";
+      const CONS_PART_MISS = "            One of these two is misplaced. Take a closer look.";
+      const CONS_COMPLETED = "Hooray! Now all constellations are in place. The setting to hide/show constellations is available now.";
       const STARS_STAGE = "Let's find the most interesting neighboring stars. Use 'Go to Sun' if you got lost. ";
-      const oxg = [
+      const STARS_TO_VISIT = [
         "* alf CMa",
         "* alf Lyr",
         "* alf PsA",
@@ -74,7 +73,7 @@
         "Why not visit Aldebaran? (Alpha TAURUS)",
         "The last destination is Arcturus (Alpha BOOTES)",
       ];
-      const oru = [
+      const STARS_INFO = [
         "Sirius is the brightest star in the night sky. It's a binary star consisting of a main-sequence star Sirius A, and a faint white dwarf Sirius B.",
         "Vega is the fifth-brightest star in the night sky and is only about a tenth of the age of the Sun.",
         "Fomalhaut is a class A star on the main sequence approximately 25 light-years from the Sun.",
@@ -82,7 +81,7 @@
         "Arcturus is a red giant of spectral type K, an aging star around 7.1 billion years old.",
       ];
       const CLUSTERS_STAGE = "Looks like it's time to visit nearest star clusters. Move with WASD. Use mouse panning to correct the direction and the compas to navigate. Zoom in to see the compass.";
-      const omi = ["HYADES", "PLEIADES", "BEEHIVE", "IC 2391", "NGC 3532"];
+      const CLUSTERS_TO_VISIT = ["HYADES", "PLEIADES", "BEEHIVE", "IC 2391", "NGC 3532"];
       const CLUSTERS_INSTRUCTIONS = [
         " The first stop is HYADES cluster in Taurus",
         " Next let's visit the PLEIADES cluster which is also in Taurus but a bit further",
@@ -90,7 +89,7 @@
         " The next stop is IC 2391 in Vela",
         " And the last one is NGC 3532 in Carina",
       ];
-      const oby = [
+      const CLUSTERS_INFO = [
         "The age of the Hyades is estimated to be about 625 million years. The core of the cluster, where stars are the most densely packed, has a radius of 8.8 light-years, and the cluster's tidal radius is 33 light-years.",
         "The cluster is dominated by hot blue luminous stars that have formed within the last 100 million years. Astronomers estimate that the cluster will survive for approximately another 250 million years, after which the clustering will be lost due to gravitational interactions with the galactic neighborhood.",
         "Age and proper motion of the Beehive Cluster coincide with those of the Hyades, suggesting they may share similar origins. Both clusters also contain red giants and white dwarfs, which represent later stages of stellar evolution, along with many main sequence stars.",
@@ -98,18 +97,18 @@
         "NGC 3532 is an open cluster in the constellation Carina. Its population of approximately 150 stars of 7th magnitude or fainter includes seven red giants and seven white dwarfs.",
       ];
       const MODE_COMPLETED = "Exploratory mode completed. Search by star name is available now. You can also use density setting to find interesting areas in Sun surroundings.";
-      const nwe = "Exploratory", nug = "Free";
-      const nsr = {
+      const EXPLORATORY_MODE = "Exploratory";
+      const APPTYPE = {
         nrv: "nrv",
         non: "non",
-        nmk: "nmk",
+        STAR: "STAR",
         njy: "njy",
-        ner: "ner",
+        BLACK_HOLE: "BLACK_HOLE",
       };
       const nax = { mzz: "mzz", myz: "myz", mxm: "mxm", muc: "muc" };
-      var scene, dam, crw, renderer;
-      const dfa = 1391400,
-        din = 0.01;
+      var scene, camera, controls, renderer;
+      const SUN_DIAMETER = 1391400,
+        DEFAULT_RADIUS = 0.01;
       var dkk,
         dly = 200,
         dnw = 1500,
@@ -158,11 +157,10 @@
         hfy = 80.0,
         his = 40.0;
       var hmi = new THREE.Vector3(),
-        hpj = new THREE.IcosahedronBufferGeometry(1, 4);
+        starGeometry = new THREE.IcosahedronBufferGeometry(1, 4);
       var progress = 0,
         huq = 30,
-        mouseDownX,
-        mouseDownY;
+        mouseDownX, mouseDownY;
       var ieq = [],
         ihm = [],
         iky = [],
@@ -206,21 +204,21 @@
       const kkj = document.getElementById("info");
       var klv, koj;
       scene = new THREE.Scene();
-      dam = new THREE.PerspectiveCamera(
+      camera = new THREE.PerspectiveCamera(
         40,
         window.innerWidth / window.innerHeight,
         0.1,
         50000.0
       );
-      dam.position.set(0, 0, 3);
-      dam.lookAt(0, 0, 0);
-      crw = new OrbitControls(dam, renderer.domElement);
-      crw.minDistance = 0.5;
-      crw.maxDistance = 50000.0;
-      crw.enableKeys = false;
-      crw.enablePan = false;
-      crw.addEventListener("change", wup);
-      var kqp = new RenderPass(scene, dam);
+      camera.position.set(0, 0, 3);
+      camera.lookAt(0, 0, 0);
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.minDistance = 0.5;
+      controls.maxDistance = 50000.0;
+      controls.enableKeys = false;
+      controls.enablePan = false;
+      controls.addEventListener("change", wup);
+      var kqp = new RenderPass(scene, camera);
       var bloomPass = new UnrealBloomPass(
         new THREE.Vector2(window.innerWidth, window.innerHeight),
         1.5,
@@ -264,9 +262,9 @@
           if (progress < 6 || dkk != null) {
             return;
           }
-          liq = (dam.position.x - crw.target.x) / 100.0;
-          ljt = (dam.position.y - crw.target.y) / 100.0;
-          lmg = (dam.position.z - crw.target.z) / 100.0;
+          liq = (camera.position.x - controls.target.x) / 100.0;
+          ljt = (camera.position.y - controls.target.y) / 100.0;
+          lmg = (camera.position.z - controls.target.z) / 100.0;
           var ltz = Math.floor(
             0.8 / Math.max(Math.abs(liq), Math.abs(ljt), Math.abs(lmg))
           );
@@ -299,18 +297,18 @@
         }
         if ([87, 83, 65, 68].includes(event.keyCode)) {
           var lwr = new THREE.Vector3(liq, ljt, lmg);
-          dam.position.add(lwr);
-          crw.target.add(lwr);
-          dam.lookAt(crw.target);
+          camera.position.add(lwr);
+          controls.target.add(lwr);
+          camera.lookAt(controls.target);
           if (arrow != undefined && scene.children.includes(arrow)) {
             arrow.position.add(lwr);
             arrow.lookAt(gjm[progress - 6].center);
           }
-          if (hmi.distanceTo(crw.target) > hfy / 4) {
-            xvn(crw.target, true);
-            xvn(crw.target, false);
-            hmi.copy(crw.target);
-            xmj();
+          if (hmi.distanceTo(controls.target) > hfy / 4) {
+            xvn(controls.target, true);
+            xvn(controls.target, false);
+            hmi.copy(controls.target);
+            clearScene();
           }
         }
       });
@@ -344,7 +342,7 @@
       function ggg(yyy) {
         params.showDensity = yyy;
         for (var rrr of ttt) {
-          if (yyy && rrr.position.distanceTo(crw.target) < ooo) {
+          if (yyy && rrr.position.distanceTo(controls.target) < ooo) {
             scene.add(rrr);
           }
           if (!yyy) {
@@ -369,7 +367,7 @@
       
       var mpp = {
         goToSun: function () {
-          if (crw.position != sun.position) {
+          if (controls.position != sun.position) {
             recenter(sun);
           }
         },
@@ -395,17 +393,17 @@
         .onChange(function (value) {
           switch (value) {
             case "None":
-              if (params.Mode == nwe) {
+              if (params.Mode == EXPLORATORY_MODE) {
                 showInfo();
               } else {
                 showMessage(WELCOME_MESSAGE);
               }
               break;
             case "About":
-              showMessage(zqi);
+              showMessage(ABOUT_MESSAGE);
               break;
             case "Feedback":
-              showMessage(ztf);
+              showMessage(FEEDBACK_MESSAGE);
               break;
           }
         });
@@ -428,7 +426,7 @@
       await nlx();
       await oao();
       await rzk();
-      StarAgent.init({ scene: scene, camera: dam, controls: crw, stars: starPositions, names: ghb });
+      StarAgent.init({ scene: scene, camera: camera, controls: controls, stars: starPositions, names: ghb });
       naj();
       function naj() {
         setTimeout(function () {
@@ -490,9 +488,9 @@
                 obr = obf[1].split(" "),
                 ocu = obf[2],
                 okn = obf[3].split(" "),
-                omu = uwn(obf[0], 1.0, crw.target);
+                omu = uwn(obf[0], 1.0, controls.target);
               omu.position.setFromSphericalCoords(ocu, obr[0], obr[1]);
-              omu.apptype = nsr.njy;
+              omu.apptype = APPTYPE.njy;
               omu.name = obf[0];
               omu.center = new THREE.Vector3();
               omu.center.setFromSphericalCoords(ocu, okn[0], okn[1]);
@@ -510,7 +508,7 @@
         event.preventDefault();
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-        ldg.setFromCamera(mouse, dam);
+        ldg.setFromCamera(mouse, camera);
         var paj = ldg.intersectObjects(scene.children);
         if (paj.length > 0 && !dkk && paj[0].object.text != undefined) {
           var pca = paj[0].object;
@@ -572,9 +570,9 @@
           geometry.rotateX(Math.PI / 2);
           var material = new THREE.MeshBasicMaterial({ color: ffx });
           arrow = new THREE.Mesh(geometry, material);
-          arrow.position.x = crw.target.x;
-          arrow.position.y = crw.target.y + 0.5;
-          arrow.position.z = crw.target.z;
+          arrow.position.x = controls.target.x;
+          arrow.position.y = controls.target.y + 0.5;
+          arrow.position.z = controls.target.z;
           arrow.lookAt(gjm[progress - 6].center);
           scene.add(arrow);
         } else {
@@ -602,13 +600,13 @@
         ) {
           return;
         }
-        ldg.setFromCamera(mouse, dam);
+        ldg.setFromCamera(mouse, camera);
         var pry = ldg.intersectObjects(scene.children);
         var ptz =
-          pry.length > 0 && pry.every((obj) => obj.object.apptype == nsr.nrv);
+          pry.length > 0 && pry.every((obj) => obj.object.apptype == APPTYPE.nrv);
         if (
           pry.length > 1 &&
-          pry[0].object.position.distanceTo(dam.position) < 0.1
+          pry[0].object.position.distanceTo(camera.position) < 0.1
         ) {
           pqo = pry[1].object;
         }
@@ -628,12 +626,12 @@
             pqo = pry[0].object;
           }
           if (
-            (pqo.position.distanceTo(dam.position) < 0.3 ||
-              pqo.apptype == nsr.nrv) &&
+            (pqo.position.distanceTo(camera.position) < 0.3 ||
+              pqo.apptype == APPTYPE.nrv) &&
             pry.length > 1
           ) {
             for (var i = 1; i < pry.length; i++) {
-              if (pqo.apptype == nsr.nrv) {
+              if (pqo.apptype == APPTYPE.nrv) {
                 pqo = pry[i].object;
               } else {
                 break;
@@ -642,13 +640,13 @@
           }
           if (
             pqo == undefined ||
-            pqo.apptype == nsr.nrv ||
-            pqo.apptype == nsr.ner
+            pqo.apptype == APPTYPE.nrv ||
+            pqo.apptype == APPTYPE.BLACK_HOLE
           ) {
             return;
           }
           dzv = 0;
-          if (pqo.type === "Line" && pqo.parent.apptype == nsr.non && fhu) {
+          if (pqo.type === "Line" && pqo.parent.apptype == APPTYPE.non && fhu) {
             pqo.material.color.setHex(fdn);
             if (fmq == null) {
               fmq = pqo.parent;
@@ -659,7 +657,7 @@
                 return;
               }
               if (fnv.conGroup != null && fnv.conGroup == fmq.conGroup) {
-                showMessage(zlq);
+                showMessage(CONS_HIT);
                 var pxy = (fnv.position.x + fmq.position.x) / 2,
                   pzt = (fnv.position.y + fmq.position.y) / 2,
                   qay = (fnv.position.z + fmq.position.z) / 2;
@@ -686,9 +684,9 @@
                 dkk = nax.myz;
               } else {
                 if (fnv.conGroup != null || fmq.conGroup != null) {
-                  showMessage(pir, 5000);
+                  showMessage(CONS_PART_MISS, 5000);
                 } else {
-                  showMessage(pnn, 5000);
+                  showMessage(CONS_MISS, 5000);
                 }
                 fmq.children[0].material.color.setHex(fcg);
                 fnv.children[0].material.color.setHex(fcg);
@@ -698,23 +696,23 @@
             }
             return;
           }
-          if (pqo.type === "Line" && pqo.parent.apptype == nsr.njy && clustersStageActive) {
+          if (pqo.type === "Line" && pqo.parent.apptype == APPTYPE.njy && clustersStageActive) {
             if (
               pqo.parent.visited ||
-              dam.position.distanceTo(pqo.parent.position) > his
+              camera.position.distanceTo(pqo.parent.position) > his
             ) {
               return;
             }
-            if (pqo.parent.name != omi[progress - 6]) {
+            if (pqo.parent.name != CLUSTERS_TO_VISIT[progress - 6]) {
               return;
             }
             fld = params.showConstellations;
             showConstellations(false);
             dkk = nax.mxm;
-            crw.enabled = false;
+            controls.enabled = false;
             scene.remove(arrow);
             pqo.material.color.setHex(fdn);
-            pry = pry.filter((line) => line.object.parent.apptype == nsr.njy);
+            pry = pry.filter((line) => line.object.parent.apptype == APPTYPE.njy);
             fzt = pry[0].object.parent;
             var qai = fzt.center;
             fzt.visited = true;
@@ -725,15 +723,15 @@
             qco.x *= qfh;
             qco.y += dqx;
             qco.z *= qfh;
-            var qhc = crw.target.x,
-              qma = crw.target.y,
-              qns = crw.target.z,
+            var qhc = controls.target.x,
+              qma = controls.target.y,
+              qns = controls.target.z,
               qhx = qai.x,
               qtn = qai.y,
               qqs = qai.z,
-              qjc = dam.position.x,
-              qse = dam.position.y,
-              qpl = dam.position.z,
+              qjc = camera.position.x,
+              qse = camera.position.y,
+              qpl = camera.position.z,
               qjr = qco.x,
               quo = qco.y,
               qwi = qco.z;
@@ -768,18 +766,19 @@
       window.onresize = function () {
         var ria = window.innerWidth,
           rjn = window.innerHeight;
-        dam.aspect = ria / rjn;
-        dam.updateProjectionMatrix();
+        camera.aspect = ria / rjn;
+        camera.updateProjectionMatrix();
         renderer.setSize(ria, rjn);
         composer.setSize(ria, rjn);
         finalComposer.setSize(ria, rjn);
         wup();
       };
+      
       function recenter(rxq) {
         StarAgent.notifyStarClick(rxq);
-        var rny = crw.target.x,
-          rqj = crw.target.y,
-          rsp = crw.target.z,
+        var rny = controls.target.x,
+          rqj = controls.target.y,
+          rsp = controls.target.z,
           rop = rxq.position.x,
           rrl = rxq.position.y,
           rui = rxq.position.z;
@@ -796,15 +795,16 @@
           rwg = rwg + dsx;
         }
         if (
-          dam.position.distanceTo(rxq.position) > 0.1 &&
+          camera.position.distanceTo(rxq.position) > 0.1 &&
           rxq.text != undefined
         ) {
           ush(rxq, true);
         }
-        if (rxq.apptype == nsr.nmk) {
+        if (rxq.apptype == APPTYPE.STAR) {
           fwk = rxq;
         }
       }
+      
       async function rzk() {
         scene.traverse(wtk);
         scene.children.length = 0;
@@ -830,7 +830,7 @@
               var sgf = {};
               sgf.name = shn.split("|")[0];
               sgf.data = shn;
-              sgf.position = tby(shn);
+              sgf.position = createPosition(shn);
               starPositions.push(sgf);
               if (sgf.position.distanceTo(sfd) < hbn || sxe(sgf.name)) {
                 var sio = tko(shn);
@@ -842,7 +842,7 @@
                   }
                 }
                 spheres.push(sio);
-                if (hfy > crw.target.distanceTo(sio.position)) {
+                if (hfy > controls.target.distanceTo(sio.position)) {
                   scene.add(sio);
                 }
               }
@@ -860,19 +860,20 @@
               var sqj = new THREE.Line(spd, sbe);
               sqj.visible = false;
               sqj.shine = false;
-              sqj.apptype = nsr.nrv;
+              sqj.apptype = APPTYPE.nrv;
               lines.push(sqj);
               scene.add(sqj);
             }
             ush(fwk, true);
-            StarVisuals.init({ scene: scene, camera: dam, controls: crw, stars: spheres });
+            StarVisuals.init({ scene: scene, camera: camera, controls: controls, stars: spheres });
           })
           .catch((e) => console.error(e));
         showInfo(true);
         ppp();
-        stj();
+        showGalaxyCenter();
         wup();
       }
+      
       function ppp() {
         var csz = 100.0,
           fto = 2000.0,
@@ -915,14 +916,14 @@
         }
       }
       
-      function stj() {
-        var suo = new THREE.MeshBasicMaterial({ color: 0x100500 });
-        var svq = new THREE.Mesh(hpj, suo);
-        svq.position.setFromSphericalCoords(26000, 2.07, 4.64);
-        svq.scale.setScalar(50.0);
-        svq.name = "Sagittarius A*";
-        svq.apptype = nsr.ner;
-        scene.add(svq);
+      function showGalaxyCenter() {
+        var sagAMaterial = new THREE.MeshBasicMaterial({ color: 0x100500 });
+        var sagA = new THREE.Mesh(starGeometry, sagAMaterial);
+        sagA.position.setFromSphericalCoords(26000, 2.07, 4.64);
+        sagA.scale.setScalar(50.0);
+        sagA.name = "Sagittarius A*";
+        sagA.apptype = APPTYPE.BLACK_HOLE;
+        scene.add(sagA);
       }
       
       function sxe(taq) {
@@ -936,18 +937,15 @@
         return false;
       }
       
-      function tby(tdr) {
-        var teo = tdr.split("|"),
-          tfx = plxToLy(teo[3]),
-          tgz = teo[2].split(" "),
-          tii = degreesToRad(tgz[0]),
-          tjd = degreesToRad(tgz[1]);
-        return new THREE.Vector3().setFromSphericalCoords(
-          tfx,
-          Math.PI / 2 - tjd,
-          tii
-        );
+      function createPosition(star) {
+        var params = star.split("|"),
+          ly = plxToLy(params[3]),
+          coord = params[2].split(" "),
+          fi = degreesToRad(coord[0]),
+          theta = degreesToRad(coord[1]);
+        return new THREE.Vector3().setFromSphericalCoords(ly, Math.PI / 2 - theta, fi);
       }
+      
       function tko(tno) {
         var tmg = tno.split("|"),
           tpm = new THREE.Color(),
@@ -955,7 +953,7 @@
           tts = tmg[4];
         tpm.setHex(ncn(tts));
         var tuv = new THREE.MeshBasicMaterial({ color: tpm }),
-          twd = new THREE.Mesh(hpj, tuv),
+          twd = new THREE.Mesh(starGeometry, tuv),
           txk = plxToLy(tmg[3]);
         if (tmg[0] === "Sun") {
           txk = 0.0;
@@ -974,7 +972,7 @@
         var uel = tmg[5];
         if (uel !== undefined && uel.length != 0) {
           if (uel.endsWith("km")) {
-            uel = Number(uel.split(" ")[0] / dfa);
+            uel = Number(uel.split(" ")[0] / SUN_DIAMETER);
           } else if (uel.endsWith("mas")) {
             uel = Number(uel.split(" ")[0]);
           } else {
@@ -984,12 +982,12 @@
           uel = "NA";
         }
         if (uel == "NA") {
-          twd.scale.setScalar(din);
+          twd.scale.setScalar(DEFAULT_RADIUS);
         } else {
-          twd.scale.setScalar(din * Math.pow(uel, 0.25));
+          twd.scale.setScalar(DEFAULT_RADIUS * Math.pow(uel, 0.25));
         }
         twd.shine = true;
-        twd.apptype = nsr.nmk;
+        twd.apptype = APPTYPE.STAR;
         twd.ijz = twd.scale.x;
         twd.text =
           txk.toFixed(0) +
@@ -1039,7 +1037,7 @@
           scene.remove(utj.labelPrimary);
           scene.remove(utj.labelSecondary);
         } else {
-          if (utj.apptype != nsr.ner) {
+          if (utj.apptype != APPTYPE.BLACK_HOLE) {
             var position = new THREE.Vector3(
               utj.position.x + 3 * utj.ijz,
               utj.position.y,
@@ -1111,13 +1109,13 @@
             for (let vyv of text.split("\n")) {
               var wap = vyv.split("|");
               var coord = wap[1].split(" "),
-                wbt = uwn(wap[0], 0.4, crw.target);
+                wbt = uwn(wap[0], 0.4, controls.target);
               wbt.position.setFromSphericalCoords(30, coord[0], coord[1]);
               wbt.visible = false;
-              wbt.apptype = nsr.non;
+              wbt.apptype = APPTYPE.non;
               wbt.conGroup = wap[2];
               wbt.conName = wap[0];
-              wbt.lookAt(crw.target);
+              wbt.lookAt(controls.target);
               if (wbt.conGroup) {
                 vxv.push(wbt);
               }
@@ -1168,9 +1166,9 @@
             wyd = iky[dzv];
           dzv++;
           var wzz = new THREE.Vector3(wvv, wxb, wyd);
-          dam.position.add(wzz);
-          crw.target.add(wzz);
-          dam.lookAt(crw.target);
+          camera.position.add(wzz);
+          controls.target.add(wzz);
+          camera.lookAt(controls.target);
           if (arrow != undefined && scene.children.includes(arrow)) {
             arrow.position.add(wzz);
             arrow.lookAt(gjm[progress - 6].center);
@@ -1178,10 +1176,10 @@
           if (dzv >= dly) {
             dkk = null;
             xvn(fwk.position, false);
-            xmj();
+            clearScene();
             dzv = 0;
-            if (params.Mode == nwe && fwk.name == oxg[progress - 1]) {
-              showSmoothMessage("Well done! " + oru[progress - 1]);
+            if (params.Mode == EXPLORATORY_MODE && fwk.name == STARS_TO_VISIT[progress - 1]) {
+              showSmoothMessage("Well done! " + STARS_INFO[progress - 1]);
               var xkk = new Audio("./files/paz.mp3");
               xkk.volume = 0.5;
               xkk.play();
@@ -1210,7 +1208,7 @@
             if (xbe > 0) {
               showMessage(CONS_STAGE + "(" + xbe + "/10) left");
             } else {
-              showMessage(pcf);
+              showMessage(CONS_COMPLETED);
               myl.classList.remove("hidden");
               fhu = false;
               myl.click();
@@ -1234,17 +1232,17 @@
           dzv++;
           var xhr = new THREE.Vector3(xcd, xdw, xfs),
             xiv = new THREE.Vector3(xcw, xen, xgj);
-          dam.position.add(xhr);
-          crw.target.add(xiv);
-          dam.lookAt(crw.target);
+          camera.position.add(xhr);
+          controls.target.add(xiv);
+          camera.lookAt(controls.target);
           if (dzv >= dly) {
             dkk = nax.muc;
             dzv = 0;
             var xkk = new Audio("./files/ekm.mp3");
             xkk.volume = 0.5;
             xkk.play();
-            if (params.Mode == nwe && fzt.name == omi[progress - 6]) {
-              showSmoothMessage("Well done! " + oby[progress - 6]);
+            if (params.Mode == EXPLORATORY_MODE && fzt.name == CLUSTERS_TO_VISIT[progress - 6]) {
+              showSmoothMessage("Well done! " + CLUSTERS_INFO[progress - 6]);
               setTimeout(() => {
                 progress++;
                 showInfo();
@@ -1257,47 +1255,44 @@
           var xfs = jmt[dzv] - jmt[dzv - 1];
           dzv++;
           var xhr = new THREE.Vector3(xcd, 0.0, xfs);
-          dam.position.add(xhr);
-          dam.lookAt(crw.target);
+          camera.position.add(xhr);
+          camera.lookAt(controls.target);
           if (dzv >= dnw) {
             scene.add(arrow);
-            arrow.position.x = crw.target.x;
-            arrow.position.y = crw.target.y + 0.5;
-            arrow.position.z = crw.target.z;
+            arrow.position.x = controls.target.x;
+            arrow.position.y = controls.target.y + 0.5;
+            arrow.position.z = controls.target.z;
             arrow.lookAt(gjm[progress - 6].center);
-            crw.enabled = true;
+            controls.enabled = true;
             dkk = null;
             dzv = 0;
             showConstellations(fld);
           }
         }
-        qrm();
+        adjustStars();
         ybu();
         finalComposer.render();
       }
       
-      function qrm() {
+      function adjustStars() {
         for (var obj of scene.children) {
-          if (obj.apptype == nsr.nmk) {
-            var rch = obj.position.distanceTo(dam.position);
-            var rdy =
-              obj.material.color.g == 0.0 && obj.material.color.b == 0.0;
-            var kuq = Math.sqrt(2 * rch) / 3;
-            if (rch > hfy && obj.ijz != din) {
+          if (obj.apptype == APPTYPE.STAR) {
+            var distance = obj.position.distanceTo(camera.position);
+            var red = obj.material.color.g == 0.0 && obj.material.color.b == 0.0;
+            var kuq = Math.sqrt(2 * distance) / 3;
+            if (distance > hfy && obj.ijz != DEFAULT_RADIUS) {
               continue;
             }
-            if ((kuq < 1 && kuq > 0.5) || (!rdy && kuq > 1)) {
+            if ((kuq < 1 && kuq > 0.5) || (!red && kuq > 1)) {
               obj.scale.setScalar(kuq * obj.ijz);
             }
           }
         }
       }
       
-      function xmj() {
-        for (var xny of scene.children.filter(
-          (obj) => obj.apptype == nsr.nmk && !spheres.includes(obj)
-        )) {
-          scene.remove(xny);
+      function clearScene() {
+        for (var sphere of scene.children.filter((obj) => obj.apptype == APPTYPE.STAR && !spheres.includes(obj))) {
+          scene.remove(sphere);
         }
       }
       
