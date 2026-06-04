@@ -102,7 +102,7 @@
         nrv: "nrv",
         non: "non",
         STAR: "STAR",
-        njy: "njy",
+        CLUSTER_LABEL: "CLUSTER_LABEL",
         BLACK_HOLE: "BLACK_HOLE",
       };
       const nax = { mzz: "mzz", myz: "myz", mxm: "mxm", muc: "muc" };
@@ -424,7 +424,7 @@
       search.classList.add("hidden");
       await ngy();
       await nlx();
-      await oao();
+      await readClusters();
       await rzk();
       StarAgent.init({ scene: scene, camera: camera, controls: controls, stars: starPositions, names: ghb });
       naj();
@@ -479,26 +479,26 @@
           .catch((e) => console.error(e));
       }
       
-      function oao() {
+      function readClusters() {
         fetch("./files/baz.txt")
           .then((res) => res.text())
           .then((text) => {
-            for (let otg of text.split("\n")) {
-              var obf = otg.split("|"),
-                obr = obf[1].split(" "),
-                ocu = obf[2],
-                okn = obf[3].split(" "),
-                omu = uwn(obf[0], 1.0, controls.target);
-              omu.position.setFromSphericalCoords(ocu, obr[0], obr[1]);
-              omu.apptype = APPTYPE.njy;
-              omu.name = obf[0];
-              omu.center = new THREE.Vector3();
-              omu.center.setFromSphericalCoords(ocu, okn[0], okn[1]);
+            for (let line of text.split("\n")) {
+              var data = line.split("|"),
+                coord = data[1].split(" "),
+                distance = data[2],
+                center = data[3].split(" "),
+                clusterLabel = uwn(data[0], 1.0, controls.target);
+              clusterLabel.position.setFromSphericalCoords(distance, coord[0], coord[1]);
+              clusterLabel.apptype = APPTYPE.CLUSTER_LABEL;
+              clusterLabel.name = data[0];
+              clusterLabel.center = new THREE.Vector3();
+              clusterLabel.center.setFromSphericalCoords(distance, center[0], center[1]);
               var oph = new THREE.Vector3();
-              oph.y = omu.position.y;
-              omu.lookAt(oph);
-              etu.push(...omu.children);
-              gjm.push(omu);
+              oph.y = clusterLabel.position.y;
+              clusterLabel.lookAt(oph);
+              etu.push(...clusterLabel.children);
+              gjm.push(clusterLabel);
             }
           })
           .catch((e) => console.error(e));
@@ -696,7 +696,7 @@
             }
             return;
           }
-          if (pqo.type === "Line" && pqo.parent.apptype == APPTYPE.njy && clustersStageActive) {
+          if (pqo.type === "Line" && pqo.parent.apptype == APPTYPE.CLUSTER_LABEL && clustersStageActive) {
             if (
               pqo.parent.visited ||
               camera.position.distanceTo(pqo.parent.position) > his
@@ -712,7 +712,7 @@
             controls.enabled = false;
             scene.remove(arrow);
             pqo.material.color.setHex(fdn);
-            pry = pry.filter((line) => line.object.parent.apptype == APPTYPE.njy);
+            pry = pry.filter((line) => line.object.parent.apptype == APPTYPE.CLUSTER_LABEL);
             fzt = pry[0].object.parent;
             var qai = fzt.center;
             fzt.visited = true;
