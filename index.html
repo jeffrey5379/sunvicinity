@@ -105,19 +105,19 @@
         CLUSTER_LABEL: "CLUSTER_LABEL",
         BLACK_HOLE: "BLACK_HOLE",
       };
-      const ANIMATION = { mzz: "mzz", CONS_SWAP: "CONS_SWAP", CLUSTER_ONE: "CLUSTER_ONE", muc: "muc" };
+      const ANIMATION = { RECENTER: "RECENTER", CONS_SWAP: "CONS_SWAP", CLUSTER_ONE: "CLUSTER_ONE", CLUSTER_TWO: "CLUSTER_TWO" };
       var scene, camera, controls, renderer;
       const SUN_DIAMETER = 1391400,
         DEFAULT_RADIUS = 0.01;
       var animation,
         animationSteps = 200,
-        dnw = 1500,
+        clusterAnimationSteps = 1500,
         cameraElevation = 10,
         tempInc = Math.PI / animationSteps;
-      var dvr = (2 * Math.PI) / dnw,
+      var dvr = (2 * Math.PI) / clusterAnimationSteps,
         currentStep = 0,
         ebd = 6;
-      var ecz = [],
+      var constellations = [],
         edv = [],
         constellationNames = [],
         lines = [],
@@ -138,7 +138,7 @@
         chosenCon,
         pairCon,
         arrow,
-        fsu,
+        actualMessage,
         foundStar,
         activeStar,
         activeCluster,
@@ -146,7 +146,7 @@
       var chosenConSteps = [],
         pairConSteps = [],
         starColours = [],
-        ghb = [],
+        starNames = [],
         clusters = [],
         glq = [],
         gny = [],
@@ -159,27 +159,27 @@
       var prevUpdate = new THREE.Vector3(),
         starGeometry = new THREE.IcosahedronBufferGeometry(1, 4);
       var progress = 0,
-        huq = 30,
+        SMOOTH_MESSAGE_TIMEOUT = 30,
         mouseDownX, mouseDownY;
-      var ieq = [],
-        ihm = [],
-        iky = [],
-        inc = [],
-        iom = [],
-        iqp = [],
-        ist = [],
-        ivu = [],
-        jay = [],
-        jhw = [],
-        jmt = [],
-        jvo;
+      var xSteps = [],
+        ySteps = [],
+        zSteps = [],
+        cameraXsteps = [],
+        cameraYsteps = [],
+        cameraZsteps = [],
+        targetXsteps = [],
+        targetYsteps = [],
+        targetZsteps = [],
+        cameraXstepsTwo = [],
+        cameraZstepsTwo = [],
+        mainFont;
       const delay = (millis) =>
         new Promise((resolve, reject) => {
           setTimeout((_) => resolve(), millis);
         });
       var kbi = new THREE.FontLoader();
       kbi.load("urbanist_bold.json", function (kdp) {
-        jvo = kdp;
+        mainFont = kdp;
       });
       var params = {
         exposure: ebd,
@@ -369,7 +369,7 @@
       gui.add(params, "Search").onFinishChange(function (value) {
         var star = starPositions.find((star) => star.name == value);
         if (star == null) {
-          var name = ghb.find((obj) => obj.name == value);
+          var name = starNames.find((obj) => obj.name == value);
           if (name != null) {
             star = starPositions.find((obj) => obj.name == name.code);
           }
@@ -401,8 +401,8 @@
           }
         });
       var searchEl = document.querySelector(".c>input[type=text]");
-      var myl = document.evaluate("//li[div[span[text()='Show constellations']]]", document, null, XPathResult.ANY_TYPE, null).iterateNext();
-      myl.classList.add("hidden");
+      var showConstEl = document.evaluate("//li[div[span[text()='Show constellations']]]", document, null, XPathResult.ANY_TYPE, null).iterateNext();
+      showConstEl.classList.add("hidden");
       var showDensityEl = document.evaluate("//li[div[span[text()='Show density']]]", document, null, XPathResult.ANY_TYPE, null).iterateNext();
       showDensityEl.classList.add("hidden");
       var search = document.evaluate("//li[div[span[text()='Search']]]", document, null, XPathResult.ANY_TYPE, null).iterateNext();
@@ -411,7 +411,7 @@
       await readNames();
       await readClusters();
       await rzk();
-      StarAgent.init({ scene: scene, camera: camera, controls: controls, stars: starPositions, names: ghb });
+      StarAgent.init({ scene: scene, camera: camera, controls: controls, stars: starPositions, names: starNames });
       naj();
       function naj() {
         setTimeout(function () {
@@ -458,7 +458,7 @@
                 obj = {};
               obj.code = data[0];
               obj.name = data[1];
-              ghb.push(obj);
+              starNames.push(obj);
             }
           })
           .catch((e) => console.error(e));
@@ -473,7 +473,7 @@
                 coord = data[1].split(" "),
                 distance = data[2],
                 center = data[3].split(" "),
-                clusterLabel = uwn(data[0], 1.0, controls.target);
+                clusterLabel = createLabel(data[0], 1.0, controls.target);
               clusterLabel.position.setFromSphericalCoords(distance, coord[0], coord[1]);
               clusterLabel.apptype = APPTYPE.CLUSTER_LABEL;
               clusterLabel.name = data[0];
@@ -710,12 +710,12 @@
           
             var tempX = 0.0;
             for (let i = 0; i < animationSteps; i++) {
-              inc[i] = (Math.PI * (newCameraPosition.x - camera.position.x) * Math.sin(tempX)) / (2 * animationSteps);
-              iom[i] = (Math.PI * (newCameraPosition.y - camera.position.y) * Math.sin(tempX)) / (2 * animationSteps);
-              iqp[i] = (Math.PI * (newCameraPosition.z - camera.position.z) * Math.sin(tempX)) / (2 * animationSteps);
-              ist[i] = (Math.PI * (newTargetPosition.x - controls.target.x) * Math.sin(tempX)) / (2 * animationSteps);
-              ivu[i] = (Math.PI * (newTargetPosition.y - controls.target.y) * Math.sin(tempX)) / (2 * animationSteps);
-              jay[i] = (Math.PI * (newTargetPosition.z - controls.target.z) * Math.sin(tempX)) / (2 * animationSteps);
+              cameraXsteps[i] = (Math.PI * (newCameraPosition.x - camera.position.x) * Math.sin(tempX)) / (2 * animationSteps);
+              cameraYsteps[i] = (Math.PI * (newCameraPosition.y - camera.position.y) * Math.sin(tempX)) / (2 * animationSteps);
+              cameraZsteps[i] = (Math.PI * (newCameraPosition.z - camera.position.z) * Math.sin(tempX)) / (2 * animationSteps);
+              targetXsteps[i] = (Math.PI * (newTargetPosition.x - controls.target.x) * Math.sin(tempX)) / (2 * animationSteps);
+              targetYsteps[i] = (Math.PI * (newTargetPosition.y - controls.target.y) * Math.sin(tempX)) / (2 * animationSteps);
+              targetZsteps[i] = (Math.PI * (newTargetPosition.z - controls.target.z) * Math.sin(tempX)) / (2 * animationSteps);
               tempX = tempX + tempInc;
             }
             var rao = new THREE.Vector3();
@@ -725,9 +725,9 @@
             tempX = Math.atan(newTargetPosition.x / newTargetPosition.z) + Math.PI / 2;
             var rei = Math.sign(newTargetPosition.x),
               rgq = Math.sign(newTargetPosition.z);
-            for (let i = 0; i < dnw; i++) {
-              jhw[i] = rgq * rei * rco * Math.cos(tempX);
-              jmt[i] = -rgq * rco * Math.sin(tempX);
+            for (let i = 0; i < clusterAnimationSteps; i++) {
+              cameraXstepsTwo[i] = rgq * rei * rco * Math.cos(tempX);
+              cameraZstepsTwo[i] = -rgq * rco * Math.sin(tempX);
               tempX = tempX - dvr;
             }
             return;
@@ -749,22 +749,16 @@
       
       function recenter(rxq) {
         StarAgent.notifyStarClick(rxq);
-        var rny = controls.target.x,
-          rqj = controls.target.y,
-          rsp = controls.target.z,
-          rop = rxq.position.x,
-          rrl = rxq.position.y,
-          rui = rxq.position.z;
-        animation = ANIMATION.mzz;
+        animation = ANIMATION.RECENTER;
         if (activeStar != undefined) {
           showLabel(activeStar, false);
         }
         updateScene(rxq.position, true);
         var rwg = 0.0;
         for (let i = 0; i < animationSteps; i++) {
-          ieq[i] = (Math.PI * (rop - rny) * Math.sin(rwg)) / (2 * animationSteps);
-          ihm[i] = (Math.PI * (rrl - rqj) * Math.sin(rwg)) / (2 * animationSteps);
-          iky[i] = (Math.PI * (rui - rsp) * Math.sin(rwg)) / (2 * animationSteps);
+          xSteps[i] = (Math.PI * (rxq.position.x - controls.target.x) * Math.sin(rwg)) / (2 * animationSteps);
+          ySteps[i] = (Math.PI * (rxq.position.y - controls.target.y) * Math.sin(rwg)) / (2 * animationSteps);
+          zSteps[i] = (Math.PI * (rxq.position.z - controls.target.z) * Math.sin(rwg)) / (2 * animationSteps);
           rwg = rwg + tempInc;
         }
         if (
@@ -782,7 +776,7 @@
         scene.traverse(disposeMaterial);
         scene.children.length = 0;
         const sbe = new THREE.LineBasicMaterial({ color: ffx });
-        vrj();
+        readConstellationData();
         var urls = [];
         for (var i = 1; i <= 12; i++) {
           urls.push("./files/ydf" + i + ".txt");
@@ -805,9 +799,9 @@
               sgf.data = shn;
               sgf.position = createPosition(shn);
               starPositions.push(sgf);
-              if (sgf.position.distanceTo(sfd) < cacheDistance || sxe(sgf.name)) {
+              if (sgf.position.distanceTo(sfd) < cacheDistance || constellationStar(sgf.name)) {
                 var sio = createStar(shn);
-                for (let sju of ecz) {
+                for (let sju of constellations) {
                   for (let skv of sju) {
                     if (skv.name === sio.name) {
                       skv.position = sio.position;
@@ -820,7 +814,7 @@
                 }
               }
             }
-            for (let smc of ecz) {
+            for (let smc of constellations) {
               const snh = [];
               for (let sok of smc) {
                 if (sok.position.x === undefined) {
@@ -881,7 +875,7 @@
                   ? yll
                   : white;
               if (mtr[i][j][k] != 0) {
-                var utr = uwn(mtr[i][j][k] + "", 4.0, pti, clr);
+                var utr = createLabel(mtr[i][j][k] + "", 4.0, pti, clr);
                 densities.push(utr);
               }
             }
@@ -899,10 +893,10 @@
         scene.add(sagA);
       }
       
-      function sxe(taq) {
-        for (let syd of ecz) {
-          for (let szp of syd) {
-            if (szp.name === taq) {
+      function constellationStar(starName) {
+        for (let line of constellations) {
+          for (let star of line) {
+            if (star.name === starName) {
               return true;
             }
           }
@@ -913,76 +907,67 @@
       function createPosition(star) {
         var params = star.split("|"),
           ly = plxToLy(params[3]),
-          coord = params[2].split(" "),
+          coord = params[2].split(" ");
+        return new THREE.Vector3().setFromSphericalCoords(ly, Math.PI / 2 - degreesToRad(coord[1]), degreesToRad(coord[0]));
+      }
+      
+      function createStar(star) {
+        var params = star.split("|"),
+          color = new THREE.Color(),
+          name = params[0],
+          spectralType = params[4];
+        color.setHex(getColorBySpectralType(spectralType));
+        var material = new THREE.MeshBasicMaterial({ color: color }),
+          sphere = new THREE.Mesh(starGeometry, material),
+          ly = plxToLy(params[3]);
+        if (params[0] === "Sun") {
+          ly = 0.0;
+          sun = sphere;
+          activeStar = sphere;
+        }
+        var coord = params[2].split(" "),
           fi = degreesToRad(coord[0]),
           theta = degreesToRad(coord[1]);
-        return new THREE.Vector3().setFromSphericalCoords(ly, Math.PI / 2 - theta, fi);
-      }
-      
-      function createStar(tno) {
-        var tmg = tno.split("|"),
-          tpm = new THREE.Color(),
-          trt = tmg[0],
-          tts = tmg[4];
-        tpm.setHex(getColorBySpectralType(tts));
-        var tuv = new THREE.MeshBasicMaterial({ color: tpm }),
-          twd = new THREE.Mesh(starGeometry, tuv),
-          txk = plxToLy(tmg[3]);
-        if (tmg[0] === "Sun") {
-          txk = 0.0;
-          sun = twd;
-          activeStar = twd;
+        sphere.position.setFromSphericalCoords(ly, Math.PI / 2 - theta, fi);
+        sphere.name = name;
+        var secondName = starNames.find((star) => star.code == name);
+        if (secondName != null) {
+          sphere.secondName = secondName.name;
         }
-        var tzb = tmg[2].split(" "),
-          uao = degreesToRad(tzb[0]),
-          ubs = degreesToRad(tzb[1]);
-        twd.position.setFromSphericalCoords(txk, Math.PI / 2 - ubs, uao);
-        twd.name = trt;
-        var ucx = ghb.find((ufu) => ufu.code == trt);
-        if (ucx != null) {
-          twd.secondName = ucx.name;
-        }
-        var uel = tmg[5];
-        if (uel !== undefined && uel.length != 0) {
-          if (uel.endsWith("km")) {
-            uel = Number(uel.split(" ")[0] / SUN_DIAMETER);
-          } else if (uel.endsWith("mas")) {
-            uel = Number(uel.split(" ")[0]);
+        var size = params[5];
+        if (size !== undefined && size.length != 0) {
+          if (size.endsWith("km")) {
+            size = Number(size.split(" ")[0] / SUN_DIAMETER);
+          } else if (size.endsWith("mas")) {
+            size = Number(size.split(" ")[0]);
           } else {
-            uel = "NA";
+            size = "NA";
           }
         } else {
-          uel = "NA";
+          size = "NA";
         }
-        if (uel == "NA") {
-          twd.scale.setScalar(DEFAULT_RADIUS);
+        if (size == "NA") {
+          sphere.scale.setScalar(DEFAULT_RADIUS);
         } else {
-          twd.scale.setScalar(DEFAULT_RADIUS * Math.pow(uel, 0.25));
+          sphere.scale.setScalar(DEFAULT_RADIUS * Math.pow(size, 0.25));
         }
-        twd.shine = true;
-        twd.apptype = APPTYPE.STAR;
-        twd.initialscale = twd.scale.x;
-        twd.text =
-          txk.toFixed(0) +
-          " ly. Type " +
-          tmg[1] +
-          " Class " +
-          tts +
-          (typeof uel == "number" && uel.toFixed(0) > 1
-            ? ". " + uel.toFixed(0) + " Sun radii"
-            : "");
-        if (twd == sun) {
-          twd.text = "Class " + tts;
+        sphere.shine = true;
+        sphere.apptype = APPTYPE.STAR;
+        sphere.initialscale = sphere.scale.x;
+        sphere.text = ly.toFixed(0) + " ly. Type " + params[1] + " Class " + spectralType + 
+          (typeof size == "number" && size.toFixed(0) > 1 ? ". " + size.toFixed(0) + " Sun radii" : "");
+        if (sphere == sun) {
+          sphere.text = "Class " + spectralType;
         }
-        return twd;
+        return sphere;
       }
       
-      async function showSmoothMessage(uiu) {
-        fsu = uiu;
-        for (var i = 0; i <= uiu.length; i++) {
-          info.innerText = uiu.substring(0, i);
-          await delay(huq);
-          if (uiu != fsu) {
+      async function showSmoothMessage(message) {
+        actualMessage = message;
+        for (var i = 0; i <= message.length; i++) {
+          info.innerText = message.substring(0, i);
+          await delay(SMOOTH_MESSAGE_TIMEOUT);
+          if (message != actualMessage) {
             break;
           }
         }
@@ -1001,106 +986,102 @@
         }
       }
       
-      function showState(uqn) {
-        state.innerText = uqn;
+      function showState(message) {
+        state.innerText = message;
       }
       
-      function showLabel(utj, uvc) {
-        if (!uvc) {
-          scene.remove(utj.labelPrimary);
-          scene.remove(utj.labelSecondary);
+      function showLabel(sphere, show) {
+        if (!show) {
+          scene.remove(sphere.labelPrimary);
+          scene.remove(sphere.labelSecondary);
         } else {
-          if (utj.apptype != APPTYPE.BLACK_HOLE) {
+          if (sphere.apptype != APPTYPE.BLACK_HOLE) {
             var position = new THREE.Vector3(
-              utj.position.x + 3 * utj.initialscale,
-              utj.position.y,
-              utj.position.z
+              sphere.position.x + 3 * sphere.initialscale,
+              sphere.position.y,
+              sphere.position.z
             );
-            var name = utj.secondName != undefined
-                ? utj.secondName + " (" + utj.name + ")"
-                : utj.name;
-            utj.labelPrimary = uwn(name, 0.02, position);
-            scene.add(utj.labelPrimary);
+            var name = sphere.secondName != undefined
+                ? sphere.secondName + " (" + sphere.name + ")"
+                : sphere.name;
+            sphere.labelPrimary = createLabel(name, 0.02, position);
+            scene.add(sphere.labelPrimary);
             position.y -= 0.015;
-            utj.labelSecondary = uwn(utj.text, 0.005, position);
-            scene.add(utj.labelSecondary);
+            sphere.labelSecondary = createLabel(sphere.text, 0.005, position);
+            scene.add(sphere.labelSecondary);
           }
         }
       }
       
-      function uwn(uya, uzf, vaw, ujm) {
-        var mww = ujm == undefined ? white : ujm;
-        var vbq = new THREE.LineBasicMaterial({
-          color: mww,
+      function createLabel(message, size, position, color) {
+        var matColor = color == undefined ? white : color;
+        var labelMat = new THREE.LineBasicMaterial({
+          color: matColor,
           side: THREE.DoubleSide,
         });
-        var vci = jvo.generateShapes(uya, uzf);
-        var vdg = [];
-        for (var i = 0; i < vci.length; i++) {
-          var vil = vci[i];
-          if (vil.holes && vil.holes.length > 0) {
-            for (var j = 0; j < vil.holes.length; j++) {
-              var hole = vil.holes[j];
-              vdg.push(hole);
+        var shapes = mainFont.generateShapes(message, size);
+        var holeShapes = [];
+        for (var i = 0; i < shapes.length; i++) {
+          var shape = shapes[i];
+          if (shape.holes && shape.holes.length > 0) {
+            for (var j = 0; j < shape.holes.length; j++) {
+              var hole = shape.holes[j];
+              holeShapes.push(hole);
             }
           }
         }
-        vci.push.apply(vci, vdg);
+        shapes.push.apply(shapes, holeShapes);
         var label = new THREE.Object3D();
-        for (var i = 0; i < vci.length; i++) {
-          var vil = vci[i],
-            vjp = vil.getPoints(),
-            vke = new THREE.BufferGeometry().setFromPoints(vjp),
-            vlf = new THREE.Line(vke, vbq);
-          label.add(vlf);
+        for (var i = 0; i < shapes.length; i++) {
+          label.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(shapes[i].getPoints()), labelMat););
         }
-        label.position.copy(vaw);
+        label.position.copy(position);
         return label;
       }
       
-      function vrj() {
+      function readConstellationData() {
         fetch("./files/guz.txt")
           .then((res) => res.text())
           .then((text) => {
-            for (let vst of text.split("\n")) {
-              var vtt = [];
-              for (let vux of vst.split("|")) {
-                var vwq = {};
-                vwq.name = vux;
-                vwq.position = {};
-                vtt.push(vwq);
+            for (let line of text.split("\n")) {
+              var listOfStars = [];
+              for (let star of line.split("|")) {
+                var obj = {};
+                obj.name = star;
+                obj.position = {};
+                listOfStars.push(obj);
               }
-              ecz.push(vtt);
+              constellations.push(listOfStars);
             }
           })
           .catch((e) => console.error(e));
         fetch("./files/psu.txt")
           .then((res) => res.text())
           .then((text) => {
-            var vxv = [];
-            for (let vyv of text.split("\n")) {
-              var wap = vyv.split("|");
-              var coord = wap[1].split(" "),
-                wbt = uwn(wap[0], 0.4, controls.target);
-              wbt.position.setFromSphericalCoords(30, coord[0], coord[1]);
-              wbt.visible = false;
-              wbt.apptype = APPTYPE.CONLABEL;
-              wbt.conGroup = wap[2];
-              wbt.conName = wap[0];
-              wbt.lookAt(controls.target);
-              if (wbt.conGroup) {
-                vxv.push(wbt);
+            var groups = [];
+            for (let line of text.split("\n")) {
+              var data = line.split("|");
+              var coord = data[1].split(" "),
+                conLabel = createLabel(data[0], 0.4, controls.target);
+              conLabel.position.setFromSphericalCoords(30, coord[0], coord[1]);
+              conLabel.visible = false;
+              conLabel.apptype = APPTYPE.CONLABEL;
+              conLabel.conGroup = data[2];
+              conLabel.conName = data[0];
+              conLabel.lookAt(controls.target);
+              if (conLabel.conGroup) {
+                groups.push(conLabel);
               }
-              conLabelLines.push(...wbt.children);
-              constellationNames.push(wbt);
-              scene.add(wbt);
+              conLabelLines.push(...conLabel.children);
+              constellationNames.push(conLabel);
+              scene.add(conLabel);
             }
-            while (vxv.length > 0) {
-              var wcz = vxv[0];
-              for (let wef of vxv) {
-                if (wcz != wef && wcz.conGroup == wef.conGroup) {
-                  swapConsOnInit(wcz, wef);
-                  vxv = vxv.filter((label) => label.conGroup != wcz.conGroup);
+            while (groups.length > 0) {
+              var first = groups[0];
+              for (let conLabel of groups) {
+                if (first != conLabel && first.conGroup == conLabel.conGroup) {
+                  swapConsOnInit(first, conLabel);
+                  groups = groups.filter((label) => label.conGroup != first.conGroup);
                 }
               }
             }
@@ -1132,17 +1113,14 @@
       
       function render() {
         StarVisuals.update();
-        if (animation == ANIMATION.mzz) {
-          var wvv = ieq[currentStep],
-            wxb = ihm[currentStep],
-            wyd = iky[currentStep];
+        if (animation == ANIMATION.RECENTER) {
+          var move = new THREE.Vector3(xSteps[currentStep], ySteps[currentStep], zSteps[currentStep]);
           currentStep++;
-          var wzz = new THREE.Vector3(wvv, wxb, wyd);
-          camera.position.add(wzz);
-          controls.target.add(wzz);
+          camera.position.add(move);
+          controls.target.add(move);
           camera.lookAt(controls.target);
           if (arrow != undefined && scene.children.includes(arrow)) {
-            arrow.position.add(wzz);
+            arrow.position.add(move);
             arrow.lookAt(clusters[progress - 6].center);
           }
           if (currentStep >= animationSteps) {
@@ -1176,14 +1154,14 @@
             chosenCon.conGroup = null;
             chosenCon = null;
             pairCon = null;
-            var xbe = consLeft();
-            if (xbe > 0) {
-              showMessage(CONS_STAGE + "(" + xbe + "/10) left");
+            var left = consLeft();
+            if (left > 0) {
+              showMessage(CONS_STAGE + "(" + left + "/10) left");
             } else {
               showMessage(CONS_COMPLETED);
-              myl.classList.remove("hidden");
+              showConstEl.classList.remove("hidden");
               conGameActive = false;
-              myl.click();
+              showConstEl.click();
               progress++;
               setTimeout(() => {
                 showInfo();
@@ -1195,20 +1173,15 @@
           if (activeStar != undefined) {
             showLabel(activeStar, false);
           }
-          var xcd = inc[currentStep],
-            xdw = iom[currentStep],
-            xfs = iqp[currentStep],
-            xcw = ist[currentStep],
-            xen = ivu[currentStep],
-            xgj = jay[currentStep];
+          
+          var cameramove = new THREE.Vector3(cameraXsteps[currentStep], cameraYsteps[currentStep], cameraZsteps[currentStep]),
+            targetmove = new THREE.Vector3(targetXsteps[currentStep], targetYsteps[currentStep], targetZsteps[currentStep]);
           currentStep++;
-          var xhr = new THREE.Vector3(xcd, xdw, xfs),
-            xiv = new THREE.Vector3(xcw, xen, xgj);
-          camera.position.add(xhr);
-          controls.target.add(xiv);
+          camera.position.add(cameramove);
+          controls.target.add(targetmove);
           camera.lookAt(controls.target);
           if (currentStep >= animationSteps) {
-            animation = ANIMATION.muc;
+            animation = ANIMATION.CLUSTER_TWO;
             currentStep = 0;
             var audio = new Audio("./files/ekm.mp3");
             audio.volume = 0.5;
@@ -1222,14 +1195,13 @@
             }
           }
         }
-        if (animation == ANIMATION.muc) {
-          var xcd = jhw[currentStep] - jhw[currentStep - 1];
-          var xfs = jmt[currentStep] - jmt[currentStep - 1];
+        if (animation == ANIMATION.CLUSTER_TWO) {
+          
+          var cameramove = new THREE.Vector3(cameraXstepsTwo[currentStep] - cameraXstepsTwo[currentStep - 1], 0.0, cameraZstepsTwo[currentStep] - cameraZstepsTwo[currentStep - 1]);
           currentStep++;
-          var xhr = new THREE.Vector3(xcd, 0.0, xfs);
-          camera.position.add(xhr);
+          camera.position.add(cameramove);
           camera.lookAt(controls.target);
-          if (currentStep >= dnw) {
+          if (currentStep >= clusterAnimationSteps) {
             scene.add(arrow);
             arrow.position.x = controls.target.x;
             arrow.position.y = controls.target.y + 0.5;
