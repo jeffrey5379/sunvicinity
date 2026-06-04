@@ -100,16 +100,16 @@
       const EXPLORATORY_MODE = "Exploratory";
       const APPTYPE = {
         nrv: "nrv",
-        non: "non",
+        CONLABEL: "CONLABEL",
         STAR: "STAR",
         CLUSTER_LABEL: "CLUSTER_LABEL",
         BLACK_HOLE: "BLACK_HOLE",
       };
-      const nax = { mzz: "mzz", myz: "myz", mxm: "mxm", muc: "muc" };
+      const ANIMATION = { mzz: "mzz", myz: "myz", mxm: "mxm", muc: "muc" };
       var scene, camera, controls, renderer;
       const SUN_DIAMETER = 1391400,
         DEFAULT_RADIUS = 0.01;
-      var dkk,
+      var animation,
         dly = 200,
         dnw = 1500,
         dqx = 10,
@@ -139,23 +139,23 @@
         fnv,
         arrow,
         fsu,
-        fur,
-        fwk,
+        foundStar,
+        activeStar,
         fzt,
         sun;
       var gdh = [],
         geq = [],
         gfv = [],
         ghb = [],
-        gjm = [],
+        clusters = [],
         glq = [],
         gny = [],
-        ttt = [];
-      var hbn = 240.0,
-        hcz = new THREE.Vector3(),
+        densities = [];
+      var cacheDistance = 240.0,
+        lastCachePoint = new THREE.Vector3(),
         ooo = 500.0,
-        hfy = 80.0,
-        his = 40.0;
+        lazyLoadDistance = 80.0,
+        discoverDistance = 40.0;
       var hmi = new THREE.Vector3(),
         starGeometry = new THREE.IcosahedronBufferGeometry(1, 4);
       var progress = 0,
@@ -173,7 +173,7 @@
         jhw = [],
         jmt = [],
         jvo;
-      const jyg = (millis) =>
+      const delay = (millis) =>
         new Promise((resolve, reject) => {
           setTimeout((_) => resolve(), millis);
         });
@@ -192,24 +192,19 @@
         Info: "None",
         Search: "",
       };
-      var khb = new THREE.MeshBasicMaterial({ color: "black" });
-      var khm = {};
+      var darkMaterial = new THREE.MeshBasicMaterial({ color: "black" });
+      var materials = {};
       renderer = new THREE.WebGLRenderer({ antialias: false });
       renderer.setPixelRatio(window.devicePixelRatio);
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.toneMapping = THREE.ReinhardToneMapping;
       renderer.toneMappingExposure = ebd;
       document.body.appendChild(renderer.domElement);
-      const kjd = document.getElementById("state");
-      const kkj = document.getElementById("info");
-      var klv, koj;
+      const state = document.getElementById("state");
+      const info = document.getElementById("info");
+      var tempMessage, oldText;
       scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(
-        40,
-        window.innerWidth / window.innerHeight,
-        0.1,
-        50000.0
-      );
+      camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 50000.0);
       camera.position.set(0, 0, 3);
       camera.lookAt(0, 0, 0);
       controls = new OrbitControls(camera, renderer.domElement);
@@ -217,7 +212,7 @@
       controls.maxDistance = 50000.0;
       controls.enableKeys = false;
       controls.enablePan = false;
-      controls.addEventListener("change", wup);
+      controls.addEventListener("change", render);
       var kqp = new RenderPass(scene, camera);
       var bloomPass = new UnrealBloomPass(
         new THREE.Vector2(window.innerWidth, window.innerHeight),
@@ -259,7 +254,7 @@
         }
         var liq, ljt, lmg;
         if ([87, 83, 65, 68].includes(event.keyCode)) {
-          if (progress < 6 || dkk != null) {
+          if (progress < 6 || animation != null) {
             return;
           }
           liq = (camera.position.x - controls.target.x) / 100.0;
@@ -302,11 +297,11 @@
           camera.lookAt(controls.target);
           if (arrow != undefined && scene.children.includes(arrow)) {
             arrow.position.add(lwr);
-            arrow.lookAt(gjm[progress - 6].center);
+            arrow.lookAt(clusters[progress - 6].center);
           }
-          if (hmi.distanceTo(controls.target) > hfy / 4) {
-            xvn(controls.target, true);
-            xvn(controls.target, false);
+          if (hmi.distanceTo(controls.target) > lazyLoadDistance / 4) {
+            updateScene(controls.target, true);
+            updateScene(controls.target, false);
             hmi.copy(controls.target);
             clearScene();
           }
@@ -341,7 +336,7 @@
       
       function ggg(yyy) {
         params.showDensity = yyy;
-        for (var rrr of ttt) {
+        for (var rrr of densities) {
           if (yyy && rrr.position.distanceTo(controls.target) < ooo) {
             scene.add(rrr);
           }
@@ -382,7 +377,7 @@
           }
         }
         if (mro != null) {
-          fur = mro.name;
+          foundStar = mro.name;
           recenter(mro);
         } else {
           showMessage("Nothing found", 3000);
@@ -432,7 +427,7 @@
         setTimeout(function () {
           requestAnimationFrame(naj);
         }, 15);
-        wup();
+        render();
       }
       
       function ncn(nfb) {
@@ -498,7 +493,7 @@
               oph.y = clusterLabel.position.y;
               clusterLabel.lookAt(oph);
               etu.push(...clusterLabel.children);
-              gjm.push(clusterLabel);
+              clusters.push(clusterLabel);
             }
           })
           .catch((e) => console.error(e));
@@ -510,9 +505,9 @@
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
         ldg.setFromCamera(mouse, camera);
         var paj = ldg.intersectObjects(scene.children);
-        if (paj.length > 0 && !dkk && paj[0].object.text != undefined) {
+        if (paj.length > 0 && !animation && paj[0].object.text != undefined) {
           var pca = paj[0].object;
-          if (pca != fwk) {
+          if (pca != activeStar) {
             showState(pca.name);
           }
         } else {
@@ -573,7 +568,7 @@
           arrow.position.x = controls.target.x;
           arrow.position.y = controls.target.y + 0.5;
           arrow.position.z = controls.target.z;
-          arrow.lookAt(gjm[progress - 6].center);
+          arrow.lookAt(clusters[progress - 6].center);
           scene.add(arrow);
         } else {
           scene.remove(arrow);
@@ -618,7 +613,7 @@
         }
         if (
           pry.length > 0 &&
-          dkk == null &&
+          animation == null &&
           (pry[0].object.apptype != undefined ||
             pry[0].object.parent.apptype != undefined)
         ) {
@@ -646,13 +641,13 @@
             return;
           }
           dzv = 0;
-          if (pqo.type === "Line" && pqo.parent.apptype == APPTYPE.non && fhu) {
+          if (pqo.type === "Line" && pqo.parent.apptype == APPTYPE.CONLABEL && fhu) {
             pqo.material.color.setHex(fdn);
             if (fmq == null) {
               fmq = pqo.parent;
             } else {
               fnv = pqo.parent;
-              await jyg(1000);
+              await delay(1000);
               if (fnv == fmq) {
                 return;
               }
@@ -681,7 +676,7 @@
                   fmq.position
                 );
                 geq = pwv.getPoints(dly);
-                dkk = nax.myz;
+                animation = ANIMATION.myz;
               } else {
                 if (fnv.conGroup != null || fmq.conGroup != null) {
                   showMessage(CONS_PART_MISS, 5000);
@@ -699,7 +694,7 @@
           if (pqo.type === "Line" && pqo.parent.apptype == APPTYPE.CLUSTER_LABEL && clustersStageActive) {
             if (
               pqo.parent.visited ||
-              camera.position.distanceTo(pqo.parent.position) > his
+              camera.position.distanceTo(pqo.parent.position) > discoverDistance
             ) {
               return;
             }
@@ -708,7 +703,7 @@
             }
             fld = params.showConstellations;
             showConstellations(false);
-            dkk = nax.mxm;
+            animation = ANIMATION.mxm;
             controls.enabled = false;
             scene.remove(arrow);
             pqo.material.color.setHex(fdn);
@@ -760,7 +755,7 @@
             return;
           }
           recenter(pqo);
-          wup();
+          render();
         }
       }
       window.onresize = function () {
@@ -771,7 +766,7 @@
         renderer.setSize(ria, rjn);
         composer.setSize(ria, rjn);
         finalComposer.setSize(ria, rjn);
-        wup();
+        render();
       };
       
       function recenter(rxq) {
@@ -782,11 +777,11 @@
           rop = rxq.position.x,
           rrl = rxq.position.y,
           rui = rxq.position.z;
-        dkk = nax.mzz;
-        if (fwk != undefined) {
-          ush(fwk, false);
+        animation = ANIMATION.mzz;
+        if (activeStar != undefined) {
+          showLabel(activeStar, false);
         }
-        xvn(rxq.position, true);
+        updateScene(rxq.position, true);
         var rwg = 0.0;
         for (let i = 0; i < dly; i++) {
           ieq[i] = (Math.PI * (rop - rny) * Math.sin(rwg)) / (2 * dly);
@@ -798,15 +793,15 @@
           camera.position.distanceTo(rxq.position) > 0.1 &&
           rxq.text != undefined
         ) {
-          ush(rxq, true);
+          showLabel(rxq, true);
         }
         if (rxq.apptype == APPTYPE.STAR) {
-          fwk = rxq;
+          activeStar = rxq;
         }
       }
       
       async function rzk() {
-        scene.traverse(wtk);
+        scene.traverse(disposeMaterial);
         scene.children.length = 0;
         const sbe = new THREE.LineBasicMaterial({ color: ffx });
         vrj();
@@ -832,8 +827,8 @@
               sgf.data = shn;
               sgf.position = createPosition(shn);
               starPositions.push(sgf);
-              if (sgf.position.distanceTo(sfd) < hbn || sxe(sgf.name)) {
-                var sio = tko(shn);
+              if (sgf.position.distanceTo(sfd) < cacheDistance || sxe(sgf.name)) {
+                var sio = createStar(shn);
                 for (let sju of ecz) {
                   for (let skv of sju) {
                     if (skv.name === sio.name) {
@@ -842,7 +837,7 @@
                   }
                 }
                 spheres.push(sio);
-                if (hfy > controls.target.distanceTo(sio.position)) {
+                if (lazyLoadDistance > controls.target.distanceTo(sio.position)) {
                   scene.add(sio);
                 }
               }
@@ -864,14 +859,14 @@
               lines.push(sqj);
               scene.add(sqj);
             }
-            ush(fwk, true);
+            showLabel(activeStar, true);
             StarVisuals.init({ scene: scene, camera: camera, controls: controls, stars: spheres });
           })
           .catch((e) => console.error(e));
         showInfo(true);
         ppp();
         showGalaxyCenter();
-        wup();
+        render();
       }
       
       function ppp() {
@@ -909,7 +904,7 @@
                   : fcg;
               if (mtr[i][j][k] != 0) {
                 var utr = uwn(mtr[i][j][k] + "", 4.0, pti, clr);
-                ttt.push(utr);
+                densities.push(utr);
               }
             }
           }
@@ -946,7 +941,7 @@
         return new THREE.Vector3().setFromSphericalCoords(ly, Math.PI / 2 - theta, fi);
       }
       
-      function tko(tno) {
+      function createStar(tno) {
         var tmg = tno.split("|"),
           tpm = new THREE.Color(),
           trt = tmg[0],
@@ -958,7 +953,7 @@
         if (tmg[0] === "Sun") {
           txk = 0.0;
           sun = twd;
-          fwk = twd;
+          activeStar = twd;
         }
         var tzb = tmg[2].split(" "),
           uao = degreesToRad(tzb[0]),
@@ -988,7 +983,7 @@
         }
         twd.shine = true;
         twd.apptype = APPTYPE.STAR;
-        twd.ijz = twd.scale.x;
+        twd.initialscale = twd.scale.x;
         twd.text =
           txk.toFixed(0) +
           " ly. Type " +
@@ -1007,44 +1002,43 @@
       async function showSmoothMessage(uiu) {
         fsu = uiu;
         for (var i = 0; i <= uiu.length; i++) {
-          kkj.innerText = uiu.substring(0, i);
-          await jyg(huq);
+          info.innerText = uiu.substring(0, i);
+          await delay(huq);
           if (uiu != fsu) {
             break;
           }
         }
       }
       
-      async function showMessage(uls, umt) {
-        if (!klv) {
-          koj = kkj.innerText;
+      async function showMessage(message, timeout) {
+        if (!tempMessage) {
+          oldText = info.innerText;
         }
-        kkj.innerText = uls;
-        if (umt) {
-          klv = true;
-          await jyg(umt);
-          kkj.innerText = koj;
-          klv = false;
+        info.innerText = message;
+        if (timeout) {
+          tempMessage = true;
+          await delay(timeout);
+          info.innerText = oldText;
+          tempMessage = false;
         }
       }
       
       function showState(uqn) {
-        kjd.innerText = uqn;
+        state.innerText = uqn;
       }
       
-      function ush(utj, uvc) {
+      function showLabel(utj, uvc) {
         if (!uvc) {
           scene.remove(utj.labelPrimary);
           scene.remove(utj.labelSecondary);
         } else {
           if (utj.apptype != APPTYPE.BLACK_HOLE) {
             var position = new THREE.Vector3(
-              utj.position.x + 3 * utj.ijz,
+              utj.position.x + 3 * utj.initialscale,
               utj.position.y,
               utj.position.z
             );
-            var name =
-              utj.secondName != undefined
+            var name = utj.secondName != undefined
                 ? utj.secondName + " (" + utj.name + ")"
                 : utj.name;
             utj.labelPrimary = uwn(name, 0.02, position);
@@ -1112,7 +1106,7 @@
                 wbt = uwn(wap[0], 0.4, controls.target);
               wbt.position.setFromSphericalCoords(30, coord[0], coord[1]);
               wbt.visible = false;
-              wbt.apptype = APPTYPE.non;
+              wbt.apptype = APPTYPE.CONLABEL;
               wbt.conGroup = wap[2];
               wbt.conName = wap[0];
               wbt.lookAt(controls.target);
@@ -1152,15 +1146,15 @@
         return (degrees * Math.PI) / 180.0;
       }
       
-      function wtk(obj) {
+      function disposeMaterial(obj) {
         if (obj.material) {
           obj.material.dispose();
         }
       }
       
-      function wup() {
+      function render() {
         StarVisuals.update();
-        if (dkk == nax.mzz) {
+        if (animation == ANIMATION.mzz) {
           var wvv = ieq[dzv],
             wxb = ihm[dzv],
             wyd = iky[dzv];
@@ -1171,18 +1165,18 @@
           camera.lookAt(controls.target);
           if (arrow != undefined && scene.children.includes(arrow)) {
             arrow.position.add(wzz);
-            arrow.lookAt(gjm[progress - 6].center);
+            arrow.lookAt(clusters[progress - 6].center);
           }
           if (dzv >= dly) {
-            dkk = null;
-            xvn(fwk.position, false);
+            animation = null;
+            updateScene(activeStar.position, false);
             clearScene();
             dzv = 0;
-            if (params.Mode == EXPLORATORY_MODE && fwk.name == STARS_TO_VISIT[progress - 1]) {
+            if (params.Mode == EXPLORATORY_MODE && activeStar.name == STARS_TO_VISIT[progress - 1]) {
               showSmoothMessage("Well done! " + STARS_INFO[progress - 1]);
-              var xkk = new Audio("./files/paz.mp3");
-              xkk.volume = 0.5;
-              xkk.play();
+              var audio = new Audio("./files/paz.mp3");
+              audio.volume = 0.5;
+              audio.play();
               setTimeout(() => {
                 progress++;
                 showInfo();
@@ -1190,14 +1184,14 @@
             }
           }
         }
-        if (dkk == nax.myz) {
+        if (animation == ANIMATION.myz) {
           fmq.position.copy(gdh[dly - dzv]);
           fnv.position.copy(geq[dzv]);
           dzv++;
           fmq.lookAt(sun.position);
           fnv.lookAt(sun.position);
           if (dzv >= dly) {
-            dkk = null;
+            animation = null;
             fmq.children[0].material.color.setHex(fcg);
             fnv.children[0].material.color.setHex(fcg);
             fnv.conGroup = null;
@@ -1219,9 +1213,9 @@
             }
           }
         }
-        if (dkk == nax.mxm) {
-          if (fwk != undefined) {
-            ush(fwk, false);
+        if (animation == ANIMATION.mxm) {
+          if (activeStar != undefined) {
+            showLabel(activeStar, false);
           }
           var xcd = inc[dzv],
             xdw = iom[dzv],
@@ -1236,11 +1230,11 @@
           controls.target.add(xiv);
           camera.lookAt(controls.target);
           if (dzv >= dly) {
-            dkk = nax.muc;
+            animation = ANIMATION.muc;
             dzv = 0;
-            var xkk = new Audio("./files/ekm.mp3");
-            xkk.volume = 0.5;
-            xkk.play();
+            var audio = new Audio("./files/ekm.mp3");
+            audio.volume = 0.5;
+            audio.play();
             if (params.Mode == EXPLORATORY_MODE && fzt.name == CLUSTERS_TO_VISIT[progress - 6]) {
               showSmoothMessage("Well done! " + CLUSTERS_INFO[progress - 6]);
               setTimeout(() => {
@@ -1250,7 +1244,7 @@
             }
           }
         }
-        if (dkk == nax.muc) {
+        if (animation == ANIMATION.muc) {
           var xcd = jhw[dzv] - jhw[dzv - 1];
           var xfs = jmt[dzv] - jmt[dzv - 1];
           dzv++;
@@ -1262,15 +1256,15 @@
             arrow.position.x = controls.target.x;
             arrow.position.y = controls.target.y + 0.5;
             arrow.position.z = controls.target.z;
-            arrow.lookAt(gjm[progress - 6].center);
+            arrow.lookAt(clusters[progress - 6].center);
             controls.enabled = true;
-            dkk = null;
+            animation = null;
             dzv = 0;
             showConstellations(fld);
           }
         }
         adjustStars();
-        ybu();
+        renderBloom();
         finalComposer.render();
       }
       
@@ -1279,12 +1273,12 @@
           if (obj.apptype == APPTYPE.STAR) {
             var distance = obj.position.distanceTo(camera.position);
             var red = obj.material.color.g == 0.0 && obj.material.color.b == 0.0;
-            var kuq = Math.sqrt(2 * distance) / 3;
-            if (distance > hfy && obj.ijz != DEFAULT_RADIUS) {
+            var k = Math.sqrt(2 * distance) / 3;
+            if (distance > lazyLoadDistance && obj.initialscale != DEFAULT_RADIUS) {
               continue;
             }
-            if ((kuq < 1 && kuq > 0.5) || (!red && kuq > 1)) {
-              obj.scale.setScalar(kuq * obj.ijz);
+            if ((k < 1 && k > 0.5) || (!red && k > 1)) {
+              obj.scale.setScalar(k * obj.initialscale);
             }
           }
         }
@@ -1298,67 +1292,69 @@
       
       function recalculateCache(position) {
         spheres = [];
-        for (var xst of starPositions) {
-          if (xst.position.distanceTo(position) < hbn) {
-            var xtt = tko(xst.data);
-            spheres.push(xtt);
+        for (var star of starPositions) {
+          if (star.position.distanceTo(position) < cacheDistance) {
+            var sphere = createStar(star.data);
+            spheres.push(sphere);
           }
         }
-        hcz.copy(position);
+        lastCachePoint.copy(position);
       }
       
-      function xvn(xwl, xxu) {
-        if (hcz.distanceTo(xwl) > hbn / 2) {
-          recalculateCache(xwl);
+      function updateScene(position, show) {
+        if (lastCachePoint.distanceTo(position) > cacheDistance / 2) {
+          recalculateCache(position);
         }
-        for (var xzp of spheres) {
-          if (xxu && xzp.position.distanceTo(xwl) < hfy) {
-            scene.add(xzp);
-            if (xzp.name == fur) {
-              fwk = xzp;
-              ush(xzp, true);
-              fur = undefined;
+        for (var sphere of spheres) {
+          if (show && sphere.position.distanceTo(position) < lazyLoadDistance) {
+            scene.add(sphere);
+            if (sphere.name == foundStar) {
+              activeStar = sphere;
+              showLabel(sphere, true);
+              foundStar = undefined;
             }
           }
-          if (!xxu && xzp.position.distanceTo(xwl) > hfy) {
-            scene.remove(xzp);
+          if (!show && sphere.position.distanceTo(position) > lazyLoadDistance) {
+            scene.remove(sphere);
           }
         }
-        for (var gnv of ttt) {
-          if (xxu && params.showDensity && gnv.position.distanceTo(xwl) < 500) {
-            scene.add(gnv);
+        
+        for (var density of densities) {
+          if (show && params.showDensity && density.position.distanceTo(position) < 500) {
+            scene.add(density);
           }
-          if (!xxu && gnv.position.distanceTo(xwl) > 500) {
-            scene.remove(gnv);
+          if (!show && density.position.distanceTo(position) > 500) {
+            scene.remove(density);
           }
         }
-        for (var yar of gjm) {
-          if (his > xwl.distanceTo(yar.position)) {
-            scene.add(yar);
+        
+        for (var cluster of clusters) {
+          if (discoverDistance > position.distanceTo(cluster.position)) {
+            scene.add(cluster);
           } else {
-            scene.remove(yar);
+            scene.remove(cluster);
           }
         }
         console.log("Scene objects " + scene.children.length);
       }
       
-      function ybu() {
-        scene.traverse(ycr);
+      function renderBloom() {
+        scene.traverse(darkenNonBloomed);
         composer.render();
-        scene.traverse(ydo);
+        scene.traverse(restoreMaterial);
       }
       
-      function ycr(ybg) {
-        if (!ybg.shine) {
-          khm[ybg.uuid] = ybg.material;
-          ybg.material = khb;
+      function darkenNonBloomed(obj) {
+        if (!obj.shine) {
+          materials[obj.uuid] = obj.material;
+          obj.material = darkMaterial;
         }
       }
       
-      function ydo(yay) {
-        if (khm[yay.uuid]) {
-          yay.material = khm[yay.uuid];
-          delete khm[yay.uuid];
+      function restoreMaterial(obj) {
+        if (materials[obj.uuid]) {
+          obj.material = materials[obj.uuid];
+          delete materials[obj.uuid];
         }
       }
     </script>
