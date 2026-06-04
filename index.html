@@ -49,7 +49,7 @@
       import { RenderPass } from "./jsm/postprocessing/RenderPass.js";
       import { ShaderPass } from "./jsm/postprocessing/ShaderPass.js";
       import { UnrealBloomPass } from "./jsm/postprocessing/UnrealBloomPass.js";
-      const zyw =
+      const WELCOME_MESSAGE =
         "Welcome to the vicinity of the Sun. Switch to exploratory mode to study the mechanics of the model or navigate between stars in free mode.";
       const ztf = "Your feedback is always welcome: jeffrey3829@proton.me";
       const zqi =
@@ -58,12 +58,9 @@
         "Looks like some constellations names are misplaced. Will you be able to find pairs of incorrectly named constellations? Click the constellations names which are out of place.";
       const zlq = "        Well done! Let's put them in their place.";
       const pnn = "                  No,these two are in place.";
-      const pir =
-        "            One of these two is misplaced. Take a closer look.";
-      const pcf =
-        "Hooray! Now all constellations are in place. The setting to hide/show constellations is available now.";
-      const oza =
-        "Let's find the most interesting neighboring stars. Use 'Go to Sun' if you got lost. ";
+      const pir = "            One of these two is misplaced. Take a closer look.";
+      const pcf = "Hooray! Now all constellations are in place. The setting to hide/show constellations is available now.";
+      const STARS_STAGE = "Let's find the most interesting neighboring stars. Use 'Go to Sun' if you got lost. ";
       const oxg = [
         "* alf CMa",
         "* alf Lyr",
@@ -71,7 +68,7 @@
         "* alf Tau",
         "* alf Boo",
       ];
-      const oui = [
+      const STARS_INSTRUCTIONS = [
         "The first stop is Sirius (Alpha CANIS MAJOR)",
         "The next stop is Vega (Alpha LYRA)",
         "Would you like to see Fomalhaut? (Alpha PISCIS AUSTRINUS)",
@@ -85,8 +82,7 @@
         "Aldebaran is a red giant with a surface temperature of 3,900 K, it is over 400 times as luminous as the Sun.",
         "Arcturus is a red giant of spectral type K, an aging star around 7.1 billion years old.",
       ];
-      const ooz =
-        "Looks like it's time to visit nearest star clusters. Move with WASD. Use mouse panning to correct the direction and the compas to navigate. Zoom in to see the compass.";
+      const ooz = "Looks like it's time to visit nearest star clusters. Move with WASD. Use mouse panning to correct the direction and the compas to navigate. Zoom in to see the compass.";
       const omi = ["HYADES", "PLEIADES", "BEEHIVE", "IC 2391", "NGC 3532"];
       const ojt = [
         " The first stop is HYADES cluster in Taurus",
@@ -102,10 +98,8 @@
         "IC 2391 is an open cluster in the constellation Vela consisting of hot, young, blueish stars, some of which binaries and one of which is a quadruple.",
         "NGC 3532 is an open cluster in the constellation Carina. Its population of approximately 150 stars of 7th magnitude or fainter includes seven red giants and seven white dwarfs.",
       ];
-      const nyd =
-        "Exploratory mode completed. Search by star name is available now. You can also use density setting to find interesting areas in Sun surroundings.";
-      const nwe = "Exploratory",
-        nug = "Free";
+      const nyd = "Exploratory mode completed. Search by star name is available now. You can also use density setting to find interesting areas in Sun surroundings.";
+      const nwe = "Exploratory", nug = "Free";
       const nsr = {
         nrv: "nrv",
         non: "non",
@@ -114,7 +108,7 @@
         ner: "ner",
       };
       const nax = { mzz: "mzz", myz: "myz", mxm: "mxm", muc: "muc" };
-      var ctn, dam, crw, dde;
+      var ctn, dam, crw, renderer;
       const dfa = 1391400,
         din = 0.01;
       var dkk,
@@ -141,16 +135,16 @@
         org = 0xcc6600,
         yll = 0xffff00;
       var fhu = false,
-        fis = false,
+        clustersStageActive = false,
         fld,
         fmq,
         fnv,
-        fqt,
+        arrow,
         fsu,
         fur,
         fwk,
         fzt,
-        gbt;
+        sun;
       var gdh = [],
         geq = [],
         gfv = [],
@@ -166,7 +160,7 @@
         his = 40.0;
       var hmi = new THREE.Vector3(),
         hpj = new THREE.IcosahedronBufferGeometry(1, 4);
-      var hsu = 0,
+      var progress = 0,
         huq = 30,
         hzj,
         icc;
@@ -203,12 +197,12 @@
       };
       var khb = new THREE.MeshBasicMaterial({ color: "black" });
       var khm = {};
-      dde = new THREE.WebGLRenderer({ antialias: false });
-      dde.setPixelRatio(window.devicePixelRatio);
-      dde.setSize(window.innerWidth, window.innerHeight);
-      dde.toneMapping = THREE.ReinhardToneMapping;
-      dde.toneMappingExposure = ebd;
-      document.body.appendChild(dde.domElement);
+      renderer = new THREE.WebGLRenderer({ antialias: false });
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.toneMapping = THREE.ReinhardToneMapping;
+      renderer.toneMappingExposure = ebd;
+      document.body.appendChild(.domElement);
       const kjd = document.getElementById("state");
       const kkj = document.getElementById("info");
       var klv, koj;
@@ -221,31 +215,31 @@
       );
       dam.position.set(0, 0, 3);
       dam.lookAt(0, 0, 0);
-      crw = new OrbitControls(dam, dde.domElement);
+      crw = new OrbitControls(dam, renderer.domElement);
       crw.minDistance = 0.5;
       crw.maxDistance = 50000.0;
       crw.enableKeys = false;
       crw.enablePan = false;
       crw.addEventListener("change", wup);
       var kqp = new RenderPass(ctn, dam);
-      var kta = new UnrealBloomPass(
+      var bloomPass = new UnrealBloomPass(
         new THREE.Vector2(window.innerWidth, window.innerHeight),
         1.5,
         0.4,
         0.85
       );
-      kta.threshold = params.bloomThreshold;
-      kta.strength = params.bloomStrength;
-      kta.radius = params.bloomRadius;
-      var kva = new EffectComposer(dde);
-      kva.renderToScreen = false;
-      kva.addPass(kqp);
-      kva.addPass(kta);
-      var kyr = new ShaderPass(
+      bloomPass.threshold = params.bloomThreshold;
+      bloomPass.strength = params.bloomStrength;
+      bloomPass.radius = params.bloomRadius;
+      var composer = new EffectComposer(renderer);
+      composer.renderToScreen = false;
+      composer.addPass(kqp);
+      composer.addPass(bloomPass);
+      var shaderPass = new ShaderPass(
         new THREE.ShaderMaterial({
           uniforms: {
             baseTexture: { value: null },
-            bloomTexture: { value: kva.renderTarget2.texture },
+            bloomTexture: { value: composer.renderTarget2.texture },
           },
           vertexShader: document.getElementById("vertexshader").textContent,
           fragmentShader: document.getElementById("fragmentshader").textContent,
@@ -253,22 +247,22 @@
         }),
         "baseTexture"
       );
-      kyr.needsSwap = true;
-      var lar = new EffectComposer(dde);
-      lar.addPass(kqp);
-      lar.addPass(kyr);
+      shaderPass.needsSwap = true;
+      var finalComposer = new EffectComposer(renderer);
+      finalComposer.addPass(kqp);
+      finalComposer.addPass(shaderPass);
       var ldg = new THREE.Raycaster(),
-        lgi = new THREE.Vector2();
+        mouse = new THREE.Vector2();
       window.addEventListener("mouseup", pol, false);
       window.addEventListener("mousedown", pmf, false);
       window.addEventListener("mousemove", oyi, false);
       document.addEventListener("keydown", function (event) {
-        if (document.activeElement === lhq) {
+        if (document.activeElement === searchEl) {
           return;
         }
         var liq, ljt, lmg;
         if ([87, 83, 65, 68].includes(event.keyCode)) {
-          if (hsu < 6 || dkk != null) {
+          if (progress < 6 || dkk != null) {
             return;
           }
           liq = (dam.position.x - crw.target.x) / 100.0;
@@ -309,9 +303,9 @@
           dam.position.add(lwr);
           crw.target.add(lwr);
           dam.lookAt(crw.target);
-          if (fqt != undefined && ctn.children.includes(fqt)) {
-            fqt.position.add(lwr);
-            fqt.lookAt(gjm[hsu - 6].center);
+          if (arrow != undefined && ctn.children.includes(arrow)) {
+            arrow.position.add(lwr);
+            arrow.lookAt(gjm[progress - 6].center);
           }
           if (hmi.distanceTo(crw.target) > hfy / 4) {
             xvn(crw.target, true);
@@ -321,35 +315,33 @@
           }
         }
       });
-      var mcr = new GUI();
-      mcr.width = 300;
-      mcr
-        .add(params, "Mode", ["Free", "Exploratory"])
+      var gui = new GUI();
+      gui.width = 300;
+      gui.add(params, "Mode", ["Free", "Exploratory"])
         .onChange(function (value) {
           switch (value) {
             case "Free":
-              ukm(zyw);
+              showMessage(WELCOME_MESSAGE);
               break;
             case "Exploratory":
-              if (hsu < 6) {
+              if (progress < 6) {
                 fhu = true;
               }
-              pdu(true);
+              showInfo(true);
               break;
           }
         });
-      mcr
-        .add(params, "showConstellations")
+      gui.add(params, "showConstellations")
         .name("Show constellations")
         .onChange(function (value) {
-          mep(value);
+          showConstellations(value);
         });
-      mcr
-        .add(params, "showDensity")
+      gui.add(params, "showDensity")
         .name("Show density")
         .onChange(function (value) {
           ggg(value);
         });
+      
       function ggg(yyy) {
         params.showDensity = yyy;
         for (var rrr of ttt) {
@@ -361,7 +353,8 @@
           }
         }
       }
-      function mep(mge) {
+      
+      function showConstellations(mge) {
         params.showConstellations = mge;
         for (let mht of ejo) {
           mht.visible = mge;
@@ -370,18 +363,20 @@
           mkn.visible = mge;
         }
       }
-      function mnj() {
+      
+      function consLeft() {
         return eey.filter((name) => name.pzd != null).length;
       }
+      
       var mpp = {
         goToSun: function () {
-          if (crw.position != gbt.position) {
-            rmv(gbt);
+          if (crw.position != sun.position) {
+            recenter(sun);
           }
         },
       };
-      mcr.add(mpp, "goToSun").name("Go to Sun");
-      mcr.add(params, "Search").onFinishChange(function (msi) {
+      gui.add(mpp, "goToSun").name("Go to Sun");
+      gui.add(params, "Search").onFinishChange(function (msi) {
         var mro = far.find((mts) => mts.name == msi);
         if (mro == null) {
           var mvn = ghb.find((mwp) => mwp.name == msi);
@@ -391,32 +386,31 @@
         }
         if (mro != null) {
           fur = mro.name;
-          rmv(mro);
+          recenter(mro);
         } else {
-          ukm("Nothing found", 3000);
+          showMessage("Nothing found", 3000);
         }
         this.setValue("");
       });
-      mcr
-        .add(params, "Info", ["None", "About", "Feedback"])
+      gui.add(params, "Info", ["None", "About", "Feedback"])
         .onChange(function (value) {
           switch (value) {
             case "None":
               if (params.Mode == nwe) {
-                pdu();
+                showInfo();
               } else {
-                ukm(zyw);
+                showMessage(WELCOME_MESSAGE);
               }
               break;
             case "About":
-              ukm(zqi);
+              showMessage(zqi);
               break;
             case "Feedback":
-              ukm(ztf);
+              showMessage(ztf);
               break;
           }
         });
-      var lhq = document.querySelector(".c>input[type=text]");
+      var searchEl = document.querySelector(".c>input[type=text]");
       var myl = document
         .evaluate(
           "//li[div[span[text()='Show constellations']]]",
@@ -526,9 +520,9 @@
       }
       function oyi(event) {
         event.preventDefault();
-        lgi.x = (event.clientX / window.innerWidth) * 2 - 1;
-        lgi.y = -(event.clientY / window.innerHeight) * 2 + 1;
-        ldg.setFromCamera(lgi, dam);
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        ldg.setFromCamera(mouse, dam);
         var paj = ldg.intersectObjects(ctn.children);
         if (paj.length > 0 && !dkk && paj[0].object.text != undefined) {
           var pca = paj[0].object;
@@ -539,62 +533,62 @@
           uos("");
         }
       }
-      function pdu(pfl) {
+      function showInfo(smooth) {
         if (params.Mode == "Free") {
-          if (pfl) {
-            uhm(zyw);
+          if (smooth) {
+            showSmoothMessage(WELCOME_MESSAGE);
           } else {
-            ukm(zyw);
+            showMessage(WELCOME_MESSAGE);
           }
         } else {
-          switch (hsu) {
+          switch (progress) {
             case 0:
-              if (pfl) {
-                uhm(zna + "(" + mnj() + "/10 left)");
+              if (smooth) {
+                showSmoothMessage(zna + "(" + consLeft() + "/10 left)");
               } else {
-                ukm(zna + "(" + mnj() + "/10 left)");
+                showMessage(zna + "(" + consLeft() + "/10 left)");
               }
-              rmv(gbt);
-              mep(true);
+              recenter(sun);
+              showConstellations(true);
               break;
             case 1:
             case 2:
             case 3:
             case 4:
             case 5:
-              ukm(oza + oui[hsu - 1]);
+              showMessage(STARS_STAGE + STARS_INSTRUCTIONS[progress - 1]);
               break;
             case 6:
-              phb(true);
+              showArrow(true);
             case 7:
             case 8:
             case 9:
             case 10:
-              fis = true;
-              ukm(ooz + ojt[hsu - 6]);
+              clustersStageActive = true;
+              showMessage(ooz + ojt[progress - 6]);
               break;
             case 11:
-              phb(false);
-              fis = false;
+              showArrow(false);
+              clustersStageActive = false;
               mzq.classList.remove("hidden");
               eee.classList.remove("hidden");
-              uhm(nyd);
+              showSmoothMessage(nyd);
           }
         }
       }
-      function phb(pik) {
+      function showArrow(pik) {
         if (pik) {
-          var pjp = new THREE.CylinderBufferGeometry(0, 0.03, 0.15, 24);
-          pjp.rotateX(Math.PI / 2);
-          var pky = new THREE.MeshBasicMaterial({ color: ffx });
-          fqt = new THREE.Mesh(pjp, pky);
-          fqt.position.x = crw.target.x;
-          fqt.position.y = crw.target.y + 0.5;
-          fqt.position.z = crw.target.z;
-          fqt.lookAt(gjm[hsu - 6].center);
-          ctn.add(fqt);
+          var geometry = new THREE.CylinderBufferGeometry(0, 0.03, 0.15, 24);
+          geometry.rotateX(Math.PI / 2);
+          var material = new THREE.MeshBasicMaterial({ color: ffx });
+          arrow = new THREE.Mesh(geometry, material);
+          arrow.position.x = crw.target.x;
+          arrow.position.y = crw.target.y + 0.5;
+          arrow.position.z = crw.target.z;
+          arrow.lookAt(gjm[progress - 6].center);
+          ctn.add(arrow);
         } else {
-          ctn.remove(fqt);
+          ctn.remove(arrow);
         }
       }
       function pmf(event) {
@@ -603,21 +597,20 @@
         uos("");
       }
       async function pol(event) {
-        if (!lhq.contains(event.target)) {
-          lhq.blur();
+        if (!searchEl.contains(event.target)) {
+          searchEl.blur();
         }
         event.preventDefault();
-        var ppj = 0,
-          pqo;
-        lgi.x = (event.clientX / window.innerWidth) * 2 - 1;
-        lgi.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        var ppj = 0, pqo;
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
         if (
           Math.abs(hzj - event.clientX) > 5 ||
           Math.abs(icc - event.clientY) > 5
         ) {
           return;
         }
-        ldg.setFromCamera(lgi, dam);
+        ldg.setFromCamera(mouse, dam);
         var pry = ldg.intersectObjects(ctn.children);
         var ptz =
           pry.length > 0 && pry.every((obj) => obj.object.apptype == nsr.nrv);
@@ -630,7 +623,7 @@
         if (fhu && (pry.length == 0 || ptz)) {
           pry = ldg.intersectObjects(eqo);
         }
-        if (fis && pry.length == 0) {
+        if (clustersStageActive && pry.length == 0) {
           pry = ldg.intersectObjects(etu);
         }
         if (
@@ -674,7 +667,7 @@
                 return;
               }
               if (fnv.pzd != null && fnv.pzd == fmq.pzd) {
-                ukm(zlq);
+                showMessage(zlq);
                 var pxy = (fnv.position.x + fmq.position.x) / 2,
                   pzt = (fnv.position.y + fmq.position.y) / 2,
                   qay = (fnv.position.z + fmq.position.z) / 2;
@@ -701,9 +694,9 @@
                 dkk = nax.myz;
               } else {
                 if (fnv.pzd != null || fmq.pzd != null) {
-                  ukm(pir, 5000);
+                  showMessage(pir, 5000);
                 } else {
-                  ukm(pnn, 5000);
+                  showMessage(pnn, 5000);
                 }
                 fmq.children[0].material.color.setHex(fcg);
                 fnv.children[0].material.color.setHex(fcg);
@@ -713,21 +706,21 @@
             }
             return;
           }
-          if (pqo.type === "Line" && pqo.parent.apptype == nsr.njy && fis) {
+          if (pqo.type === "Line" && pqo.parent.apptype == nsr.njy && clustersStageActive) {
             if (
               pqo.parent.visited ||
               dam.position.distanceTo(pqo.parent.position) > his
             ) {
               return;
             }
-            if (pqo.parent.name != omi[hsu - 6]) {
+            if (pqo.parent.name != omi[progress - 6]) {
               return;
             }
             fld = params.showConstellations;
-            mep(false);
+            showConstellations(false);
             dkk = nax.mxm;
             crw.enabled = false;
-            ctn.remove(fqt);
+            ctn.remove(arrow);
             pqo.material.color.setHex(fdn);
             pry = pry.filter((line) => line.object.parent.apptype == nsr.njy);
             fzt = pry[0].object.parent;
@@ -776,7 +769,7 @@
             }
             return;
           }
-          rmv(pqo);
+          recenter(pqo);
           wup();
         }
       }
@@ -785,12 +778,12 @@
           rjn = window.innerHeight;
         dam.aspect = ria / rjn;
         dam.updateProjectionMatrix();
-        dde.setSize(ria, rjn);
-        kva.setSize(ria, rjn);
-        lar.setSize(ria, rjn);
+        renderer.setSize(ria, rjn);
+        composer.setSize(ria, rjn);
+        finalComposer.setSize(ria, rjn);
         wup();
       };
-      function rmv(rxq) {
+      function recenter(rxq) {
         StarAgent.notifyStarClick(rxq);
         var rny = crw.target.x,
           rqj = crw.target.y,
@@ -883,7 +876,7 @@
             StarVisuals.init({ scene: ctn, camera: dam, controls: crw, stars: ems });
           })
           .catch((e) => console.error(e));
-        pdu(true);
+        showInfo(true);
         ppp();
         stj();
         wup();
@@ -899,7 +892,7 @@
           }
         }
         for (var jjj of far) {
-          if (jjj.position.distanceTo(gbt.position) < fto) {
+          if (jjj.position.distanceTo(sun.position) < fto) {
             var lll = Math.floor(jjj.position.x / csz) + 20;
             var gbp = Math.floor(jjj.position.y / csz) + 20;
             var xlp = Math.floor(jjj.position.z / csz) + 20;
@@ -971,7 +964,7 @@
           txk = plxToLy(tmg[3]);
         if (tmg[0] === "Sun") {
           txk = 0.0;
-          gbt = twd;
+          sun = twd;
           fwk = twd;
         }
         var tzb = tmg[2].split(" "),
@@ -1012,12 +1005,12 @@
           (typeof uel == "number" && uel.toFixed(0) > 1
             ? ". " + uel.toFixed(0) + " Sun radii"
             : "");
-        if (twd == gbt) {
+        if (twd == sun) {
           twd.text = "Class " + tts;
         }
         return twd;
       }
-      async function uhm(uiu) {
+      async function showSmoothMessage(uiu) {
         fsu = uiu;
         for (var i = 0; i <= uiu.length; i++) {
           kkj.innerText = uiu.substring(0, i);
@@ -1027,7 +1020,7 @@
           }
         }
       }
-      async function ukm(uls, umt) {
+      async function showMessage(uls, umt) {
         if (!klv) {
           koj = kkj.innerText;
         }
@@ -1172,23 +1165,23 @@
           dam.position.add(wzz);
           crw.target.add(wzz);
           dam.lookAt(crw.target);
-          if (fqt != undefined && ctn.children.includes(fqt)) {
-            fqt.position.add(wzz);
-            fqt.lookAt(gjm[hsu - 6].center);
+          if (arrow != undefined && ctn.children.includes(arrow)) {
+            arrow.position.add(wzz);
+            arrow.lookAt(gjm[progress - 6].center);
           }
           if (dzv >= dly) {
             dkk = null;
             xvn(fwk.position, false);
             xmj();
             dzv = 0;
-            if (params.Mode == nwe && fwk.name == oxg[hsu - 1]) {
-              uhm("Well done! " + oru[hsu - 1]);
+            if (params.Mode == nwe && fwk.name == oxg[progress - 1]) {
+              showSmoothMessage("Well done! " + oru[progress - 1]);
               var xkk = new Audio("./files/paz.mp3");
               xkk.volume = 0.5;
               xkk.play();
               setTimeout(() => {
-                hsu++;
-                pdu();
+                progress++;
+                showInfo();
               }, 15000);
             }
           }
@@ -1197,8 +1190,8 @@
           fmq.position.copy(gdh[dly - dzv]);
           fnv.position.copy(geq[dzv]);
           dzv++;
-          fmq.lookAt(gbt.position);
-          fnv.lookAt(gbt.position);
+          fmq.lookAt(sun.position);
+          fnv.lookAt(sun.position);
           if (dzv >= dly) {
             dkk = null;
             fmq.children[0].material.color.setHex(fcg);
@@ -1207,17 +1200,17 @@
             fmq.pzd = null;
             fmq = null;
             fnv = null;
-            var xbe = mnj();
+            var xbe = consLeft();
             if (xbe > 0) {
-              ukm(zna + "(" + xbe + "/10) left");
+              showMessage(zna + "(" + xbe + "/10) left");
             } else {
-              ukm(pcf);
+              showMessage(pcf);
               myl.classList.remove("hidden");
               fhu = false;
               myl.click();
-              hsu++;
+              progress++;
               setTimeout(() => {
-                pdu();
+                showInfo();
               }, 10000);
             }
           }
@@ -1244,11 +1237,11 @@
             var xkk = new Audio("./files/ekm.mp3");
             xkk.volume = 0.5;
             xkk.play();
-            if (params.Mode == nwe && fzt.name == omi[hsu - 6]) {
-              uhm("Well done! " + oby[hsu - 6]);
+            if (params.Mode == nwe && fzt.name == omi[progress - 6]) {
+              showSmoothMessage("Well done! " + oby[progress - 6]);
               setTimeout(() => {
-                hsu++;
-                pdu();
+                progress++;
+                showInfo();
               }, 26000);
             }
           }
@@ -1261,20 +1254,20 @@
           dam.position.add(xhr);
           dam.lookAt(crw.target);
           if (dzv >= dnw) {
-            ctn.add(fqt);
-            fqt.position.x = crw.target.x;
-            fqt.position.y = crw.target.y + 0.5;
-            fqt.position.z = crw.target.z;
-            fqt.lookAt(gjm[hsu - 6].center);
+            ctn.add(arrow);
+            arrow.position.x = crw.target.x;
+            arrow.position.y = crw.target.y + 0.5;
+            arrow.position.z = crw.target.z;
+            arrow.lookAt(gjm[progress - 6].center);
             crw.enabled = true;
             dkk = null;
             dzv = 0;
-            mep(fld);
+            showConstellations(fld);
           }
         }
         qrm();
         ybu();
-        lar.render();
+        finalComposer.render();
       }
       function qrm() {
         for (var obj of ctn.children) {
@@ -1345,7 +1338,7 @@
       }
       function ybu() {
         ctn.traverse(ycr);
-        kva.render();
+        composer.render();
         ctn.traverse(ydo);
       }
       function ycr(ybg) {
