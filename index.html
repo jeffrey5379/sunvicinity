@@ -99,53 +99,53 @@
       const MODE_COMPLETED = "Exploratory mode completed. Search by star name is available now. You can also use density setting to find interesting areas in Sun surroundings.";
       const EXPLORATORY_MODE = "Exploratory";
       const APPTYPE = {
-        nrv: "nrv",
+        CONLINE: "CONLINE",
         CONLABEL: "CONLABEL",
         STAR: "STAR",
         CLUSTER_LABEL: "CLUSTER_LABEL",
         BLACK_HOLE: "BLACK_HOLE",
       };
-      const ANIMATION = { mzz: "mzz", myz: "myz", mxm: "mxm", muc: "muc" };
+      const ANIMATION = { mzz: "mzz", CONS_SWAP: "CONS_SWAP", CLUSTER_ONE: "CLUSTER_ONE", muc: "muc" };
       var scene, camera, controls, renderer;
       const SUN_DIAMETER = 1391400,
         DEFAULT_RADIUS = 0.01;
       var animation,
-        dly = 200,
+        animationSteps = 200,
         dnw = 1500,
-        dqx = 10,
-        dsx = Math.PI / dly;
+        cameraElevation = 10,
+        tempInc = Math.PI / animationSteps;
       var dvr = (2 * Math.PI) / dnw,
-        dzv = 0,
+        currentStep = 0,
         ebd = 6;
       var ecz = [],
         edv = [],
         constellationNames = [],
         lines = [],
         spheres = [],
-        eqo = [],
-        etu = [],
+        conLabelLines = [],
+        clusterLabelLines = [],
         eyb = [],
         starPositions = [];
-      var fcg = 0xffffff,
-        fdn = 0x1996af,
+      var white = 0xffffff,
+        turquoise = 0x1996af,
         ffx = 0x161616,
         rde = 0xff0000,
         org = 0xcc6600,
         yll = 0xffff00;
-      var fhu = false,
+      var conGameActive = false,
         clustersStageActive = false,
-        fld,
-        fmq,
-        fnv,
+        constBefore,
+        chosenCon,
+        pairCon,
         arrow,
         fsu,
         foundStar,
         activeStar,
-        fzt,
+        activeCluster,
         sun;
-      var gdh = [],
-        geq = [],
-        gfv = [],
+      var chosenConSteps = [],
+        pairConSteps = [],
+        starColours = [],
         ghb = [],
         clusters = [],
         glq = [],
@@ -153,10 +153,10 @@
         densities = [];
       var cacheDistance = 240.0,
         lastCachePoint = new THREE.Vector3(),
-        ooo = 500.0,
+        densityDistance = 500.0,
         lazyLoadDistance = 80.0,
         discoverDistance = 40.0;
-      var hmi = new THREE.Vector3(),
+      var prevUpdate = new THREE.Vector3(),
         starGeometry = new THREE.IcosahedronBufferGeometry(1, 4);
       var progress = 0,
         huq = 30,
@@ -243,66 +243,64 @@
       var finalComposer = new EffectComposer(renderer);
       finalComposer.addPass(kqp);
       finalComposer.addPass(shaderPass);
-      var ldg = new THREE.Raycaster(),
+      var raycaster = new THREE.Raycaster(),
         mouse = new THREE.Vector2();
       window.addEventListener("mouseup", onDocumentMouseUp, false);
       window.addEventListener("mousedown", onDocumentMouseDown, false);
-      window.addEventListener("mousemove", oyi, false);
+      window.addEventListener("mousemove", onSphereHover, false);
       document.addEventListener("keydown", function (event) {
         if (document.activeElement === searchEl) {
           return;
         }
-        var liq, ljt, lmg;
+        var dx, dy, dz;
         if ([87, 83, 65, 68].includes(event.keyCode)) {
           if (progress < 6 || animation != null) {
             return;
           }
-          liq = (camera.position.x - controls.target.x) / 100.0;
-          ljt = (camera.position.y - controls.target.y) / 100.0;
-          lmg = (camera.position.z - controls.target.z) / 100.0;
-          var ltz = Math.floor(
-            0.8 / Math.max(Math.abs(liq), Math.abs(ljt), Math.abs(lmg))
-          );
-          if (ltz > 0) {
-            liq *= ltz;
-            ljt *= ltz;
-            lmg *= ltz;
+          dx = (camera.position.x - controls.target.x) / 100.0;
+          dy = (camera.position.y - controls.target.y) / 100.0;
+          dz = (camera.position.z - controls.target.z) / 100.0;
+          var multiply = Math.floor(0.8 / Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz)));
+          if (multiply > 0) {
+            dx *= multiply;
+            dy *= multiply;
+            dz *= multiply;
           }
         }
         switch (event.keyCode) {
           case 87:
-            liq = -liq;
-            ljt = -ljt;
-            lmg = -lmg;
+            dx = -dx;
+            dy = -dy;
+            dz = -dz;
             break;
           case 83:
             break;
           case 65:
-            ljt = 0.0;
-            var temp = liq;
-            liq = -lmg;
-            lmg = temp;
+            dy = 0.0;
+            var temp = dx;
+            dx = -dz;
+            dz = temp;
             break;
           case 68:
-            ljt = 0.0;
-            var temp = liq;
-            liq = lmg;
-            lmg = -temp;
+            dy = 0.0;
+            var temp = dx;
+            dx = dz;
+            dz = -temp;
             break;
         }
         if ([87, 83, 65, 68].includes(event.keyCode)) {
-          var lwr = new THREE.Vector3(liq, ljt, lmg);
-          camera.position.add(lwr);
-          controls.target.add(lwr);
+          var move = new THREE.Vector3(dx, dy, dz);
+          camera.position.add(move);
+          controls.target.add(move);
           camera.lookAt(controls.target);
           if (arrow != undefined && scene.children.includes(arrow)) {
-            arrow.position.add(lwr);
+            arrow.position.add(move);
             arrow.lookAt(clusters[progress - 6].center);
           }
-          if (hmi.distanceTo(controls.target) > lazyLoadDistance / 4) {
+          if (prevUpdate.distanceTo(controls.target) > lazyLoadDistance / 4) {
             updateScene(controls.target, true);
             updateScene(controls.target, false);
-            hmi.copy(controls.target);
+            prevUpdate.copy(controls.target);
             clearScene();
           }
         }
@@ -317,7 +315,7 @@
               break;
             case "Exploratory":
               if (progress < 6) {
-                fhu = true;
+                conGameActive = true;
               }
               showInfo(true);
               break;
@@ -331,17 +329,17 @@
       gui.add(params, "showDensity")
         .name("Show density")
         .onChange(function (value) {
-          ggg(value);
+          showDensity(value);
         });
       
-      function ggg(yyy) {
-        params.showDensity = yyy;
-        for (var rrr of densities) {
-          if (yyy && rrr.position.distanceTo(controls.target) < ooo) {
-            scene.add(rrr);
+      function showDensity(value) {
+        params.showDensity = value;
+        for (var density of densities) {
+          if (value && density.position.distanceTo(controls.target) < densityDistance) {
+            scene.add(density);
           }
-          if (!yyy) {
-            scene.remove(rrr);
+          if (!value) {
+            scene.remove(density);
           }
         }
       }
@@ -360,25 +358,25 @@
         return constellationNames.filter((name) => name.conGroup != null).length;
       }
       
-      var mpp = {
+      var goToSun = {
         goToSun: function () {
           if (controls.position != sun.position) {
             recenter(sun);
           }
         },
       };
-      gui.add(mpp, "goToSun").name("Go to Sun");
-      gui.add(params, "Search").onFinishChange(function (msi) {
-        var mro = starPositions.find((mts) => mts.name == msi);
-        if (mro == null) {
-          var mvn = ghb.find((mwp) => mwp.name == msi);
-          if (mvn != null) {
-            mro = starPositions.find((mxe) => mxe.name == mvn.code);
+      gui.add(goToSun, "goToSun").name("Go to Sun");
+      gui.add(params, "Search").onFinishChange(function (value) {
+        var star = starPositions.find((star) => star.name == value);
+        if (star == null) {
+          var name = ghb.find((obj) => obj.name == value);
+          if (name != null) {
+            star = starPositions.find((obj) => obj.name == name.code);
           }
         }
-        if (mro != null) {
-          foundStar = mro.name;
-          recenter(mro);
+        if (star != null) {
+          foundStar = star.name;
+          recenter(star);
         } else {
           showMessage("Nothing found", 3000);
         }
@@ -403,22 +401,14 @@
           }
         });
       var searchEl = document.querySelector(".c>input[type=text]");
-      var myl = document
-        .evaluate(
-          "//li[div[span[text()='Show constellations']]]",
-          document,
-          null,
-          XPathResult.ANY_TYPE,
-          null
-        )
-        .iterateNext();
+      var myl = document.evaluate("//li[div[span[text()='Show constellations']]]", document, null, XPathResult.ANY_TYPE, null).iterateNext();
       myl.classList.add("hidden");
       var showDensity = document.evaluate("//li[div[span[text()='Show density']]]", document, null, XPathResult.ANY_TYPE, null).iterateNext();
       showDensity.classList.add("hidden");
       var search = document.evaluate("//li[div[span[text()='Search']]]", document, null, XPathResult.ANY_TYPE, null).iterateNext();
       search.classList.add("hidden");
-      await ngy();
-      await nlx();
+      await readColours();
+      await readNames();
       await readClusters();
       await rzk();
       StarAgent.init({ scene: scene, camera: camera, controls: controls, stars: starPositions, names: ghb });
@@ -430,45 +420,45 @@
         render();
       }
       
-      function ncn(nfb) {
-        for (let ndj of gfv) {
-          for (let neb of ndj["types"]) {
-            if (nfb.startsWith(neb)) {
-              return ndj["rgb"];
+      function getColorBySpectralType(spectralType) {
+        for (let colour of starColours) {
+          for (let type of colour["types"]) {
+            if (spectralType.startsWith(type)) {
+              return colour["rgb"];
             }
           }
         }
-        console.warn("Cannot determine colour for spectral type: " + nfb);
+        console.warn("Cannot determine colour for spectral type: " + spectralType);
         return [0.0, 0.9, 0.0];
       }
       
-      function ngy() {
+      function readColours() {
         fetch("./files/wub.txt")
           .then((res) => res.text())
           .then((text) => {
             for (let colour of text.split("\n")) {
-              var nhv = colour.split("|"),
-                niu = nhv[0].split(" "),
-                njr = nhv[1].split(" "),
-                nla = {};
-              nla["types"] = niu;
-              nla["rgb"] = njr;
-              gfv.push(nla);
+              var data = colour.split("|"),
+                types = data[0].split(" "),
+                rgb = data[1].split(" "),
+                obj = {};
+              obj["types"] = types;
+              obj["rgb"] = rgb;
+              starColours.push(obj);
             }
           })
           .catch((e) => console.error(e));
       }
       
-      function nlx() {
+      function readNames() {
         fetch("./files/efs.txt")
           .then((res) => res.text())
           .then((text) => {
-            for (let nnu of text.split("\n")) {
-              var nne = nnu.split("|"),
-                npi = {};
-              npi.code = nne[0];
-              npi.name = nne[1];
-              ghb.push(npi);
+            for (let line of text.split("\n")) {
+              var data = line.split("|"),
+                obj = {};
+              obj.code = data[0];
+              obj.name = data[1];
+              ghb.push(obj);
             }
           })
           .catch((e) => console.error(e));
@@ -492,23 +482,23 @@
               var oph = new THREE.Vector3();
               oph.y = clusterLabel.position.y;
               clusterLabel.lookAt(oph);
-              etu.push(...clusterLabel.children);
+              clusterLabelLines.push(...clusterLabel.children);
               clusters.push(clusterLabel);
             }
           })
           .catch((e) => console.error(e));
       }
       
-      function oyi(event) {
+      function onSphereHover(event) {
         event.preventDefault();
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-        ldg.setFromCamera(mouse, camera);
-        var paj = ldg.intersectObjects(scene.children);
-        if (paj.length > 0 && !animation && paj[0].object.text != undefined) {
-          var pca = paj[0].object;
-          if (pca != activeStar) {
-            showState(pca.name);
+        raycaster.setFromCamera(mouse, camera);
+        var intersects = raycaster.intersectObjects(scene.children);
+        if (intersects.length > 0 && !animation && intersects[0].object.text != undefined) {
+          var object = intersects[0].object;
+          if (object != activeStar) {
+            showState(object.name);
           }
         } else {
           showState("");
@@ -586,7 +576,7 @@
           searchEl.blur();
         }
         event.preventDefault();
-        var ppj = 0, pqo;
+        var object;
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
         if (
@@ -595,166 +585,154 @@
         ) {
           return;
         }
-        ldg.setFromCamera(mouse, camera);
-        var pry = ldg.intersectObjects(scene.children);
-        var ptz =
-          pry.length > 0 && pry.every((obj) => obj.object.apptype == APPTYPE.nrv);
+        raycaster.setFromCamera(mouse, camera);
+        var intersects = raycaster.intersectObjects(scene.children);
+        var isAllConlines = intersects.length > 0 && intersects.every((obj) => obj.object.apptype == APPTYPE.CONLINE);
         if (
-          pry.length > 1 &&
-          pry[0].object.position.distanceTo(camera.position) < 0.1
+          intersects.length > 1 &&
+          intersects[0].object.position.distanceTo(camera.position) < 0.1
         ) {
-          pqo = pry[1].object;
+          object = intersects[1].object;
         }
-        if (fhu && (pry.length == 0 || ptz)) {
-          pry = ldg.intersectObjects(eqo);
+        if (conGameActive && (intersects.length == 0 || isAllConlines)) {
+          intersects = raycaster.intersectObjects(conLabelLines);
         }
-        if (clustersStageActive && pry.length == 0) {
-          pry = ldg.intersectObjects(etu);
+        if (clustersStageActive && intersects.length == 0) {
+          intersects = raycaster.intersectObjects(clusterLabelLines);
         }
         if (
-          pry.length > 0 &&
+          intersects.length > 0 &&
           animation == null &&
-          (pry[0].object.apptype != undefined ||
-            pry[0].object.parent.apptype != undefined)
+          (intersects[0].object.apptype != undefined ||
+            intersects[0].object.parent.apptype != undefined)
         ) {
-          if (pqo == undefined) {
-            pqo = pry[0].object;
+          if (object == undefined) {
+            object = intersects[0].object;
           }
           if (
-            (pqo.position.distanceTo(camera.position) < 0.3 ||
-              pqo.apptype == APPTYPE.nrv) &&
-            pry.length > 1
+            (object.position.distanceTo(camera.position) < 0.3 ||
+              object.apptype == APPTYPE.CONLINE) &&
+            intersects.length > 1
           ) {
-            for (var i = 1; i < pry.length; i++) {
-              if (pqo.apptype == APPTYPE.nrv) {
-                pqo = pry[i].object;
+            for (var i = 1; i < intersects.length; i++) {
+              if (object.apptype == APPTYPE.CONLINE) {
+                object = intersects[i].object;
               } else {
                 break;
               }
             }
           }
           if (
-            pqo == undefined ||
-            pqo.apptype == APPTYPE.nrv ||
-            pqo.apptype == APPTYPE.BLACK_HOLE
+            object == undefined ||
+            object.apptype == APPTYPE.CONLINE ||
+            object.apptype == APPTYPE.BLACK_HOLE
           ) {
             return;
           }
-          dzv = 0;
-          if (pqo.type === "Line" && pqo.parent.apptype == APPTYPE.CONLABEL && fhu) {
-            pqo.material.color.setHex(fdn);
-            if (fmq == null) {
-              fmq = pqo.parent;
+          currentStep = 0;
+          if (object.type === "Line" && object.parent.apptype == APPTYPE.CONLABEL && conGameActive) {
+            object.material.color.setHex(turquoise);
+            if (chosenCon == null) {
+              chosenCon = object.parent;
             } else {
-              fnv = pqo.parent;
+              pairCon = object.parent;
               await delay(1000);
-              if (fnv == fmq) {
+              if (pairCon == chosenCon) {
                 return;
               }
-              if (fnv.conGroup != null && fnv.conGroup == fmq.conGroup) {
+              if (pairCon.conGroup != null && pairCon.conGroup == chosenCon.conGroup) {
                 showMessage(CONS_HIT);
-                var pxy = (fnv.position.x + fmq.position.x) / 2,
-                  pzt = (fnv.position.y + fmq.position.y) / 2,
-                  qay = (fnv.position.z + fmq.position.z) / 2;
-                const puv = new THREE.QuadraticBezierCurve3(
-                  fnv.position,
+                var centerX = (pairCon.position.x + chosenCon.position.x) / 2,
+                  centerY = (pairCon.position.y + chosenCon.position.y) / 2,
+                  centerZ = (pairCon.position.z + chosenCon.position.z) / 2;
+                const firstCurve = new THREE.QuadraticBezierCurve3(
+                  pairCon.position,
                   new THREE.Vector3(
-                    (3 * pxy) / 4,
-                    (5 * pzt) / 4,
-                    (3 * qay) / 4
+                    (3 * centerX) / 4,
+                    (5 * centerY) / 4,
+                    (3 * centerZ) / 4
                   ),
-                  fmq.position
+                  chosenCon.position
                 );
-                gdh = puv.getPoints(dly);
-                const pwv = new THREE.QuadraticBezierCurve3(
-                  fnv.position,
+                chosenConSteps = firstCurve.getPoints(animationSteps);
+                const secondCurve = new THREE.QuadraticBezierCurve3(
+                  pairCon.position,
                   new THREE.Vector3(
-                    (5 * pxy) / 4,
-                    (3 * pzt) / 4,
-                    (5 * qay) / 4
+                    (5 * centerX) / 4,
+                    (3 * centerY) / 4,
+                    (5 * centerZ) / 4
                   ),
-                  fmq.position
+                  chosenCon.position
                 );
-                geq = pwv.getPoints(dly);
-                animation = ANIMATION.myz;
+                pairConSteps = secondCurve.getPoints(animationSteps);
+                animation = ANIMATION.CONS_SWAP;
               } else {
-                if (fnv.conGroup != null || fmq.conGroup != null) {
+                if (pairCon.conGroup != null || chosenCon.conGroup != null) {
                   showMessage(CONS_PART_MISS, 5000);
                 } else {
                   showMessage(CONS_MISS, 5000);
                 }
-                fmq.children[0].material.color.setHex(fcg);
-                fnv.children[0].material.color.setHex(fcg);
-                fmq = undefined;
-                fnv = undefined;
+                chosenCon.children[0].material.color.setHex(white);
+                pairCon.children[0].material.color.setHex(white);
+                chosenCon = undefined;
+                pairCon = undefined;
               }
             }
             return;
           }
-          if (pqo.type === "Line" && pqo.parent.apptype == APPTYPE.CLUSTER_LABEL && clustersStageActive) {
+          if (object.type === "Line" && object.parent.apptype == APPTYPE.CLUSTER_LABEL && clustersStageActive) {
             if (
-              pqo.parent.visited ||
-              camera.position.distanceTo(pqo.parent.position) > discoverDistance
+              object.parent.visited ||
+              camera.position.distanceTo(object.parent.position) > discoverDistance
             ) {
               return;
             }
-            if (pqo.parent.name != CLUSTERS_TO_VISIT[progress - 6]) {
+            if (object.parent.name != CLUSTERS_TO_VISIT[progress - 6]) {
               return;
             }
-            fld = params.showConstellations;
+            constBefore = params.showConstellations;
             showConstellations(false);
-            animation = ANIMATION.mxm;
+            animation = ANIMATION.CLUSTER_ONE;
             controls.enabled = false;
             scene.remove(arrow);
-            pqo.material.color.setHex(fdn);
-            pry = pry.filter((line) => line.object.parent.apptype == APPTYPE.CLUSTER_LABEL);
-            fzt = pry[0].object.parent;
-            var qai = fzt.center;
-            fzt.visited = true;
-            var qco = new THREE.Vector3();
-            qco.copy(qai);
-            var qdu = Math.max(Math.abs(qco.x), Math.abs(qco.z));
-            var qfh = (qdu - 30) / qdu;
-            qco.x *= qfh;
-            qco.y += dqx;
-            qco.z *= qfh;
-            var qhc = controls.target.x,
-              qma = controls.target.y,
-              qns = controls.target.z,
-              qhx = qai.x,
-              qtn = qai.y,
-              qqs = qai.z,
-              qjc = camera.position.x,
-              qse = camera.position.y,
-              qpl = camera.position.z,
-              qjr = qco.x,
-              quo = qco.y,
-              qwi = qco.z;
-            var qyg = 0.0;
-            for (let i = 0; i < dly; i++) {
-              inc[i] = (Math.PI * (qjr - qjc) * Math.sin(qyg)) / (2 * dly);
-              iom[i] = (Math.PI * (quo - qse) * Math.sin(qyg)) / (2 * dly);
-              iqp[i] = (Math.PI * (qwi - qpl) * Math.sin(qyg)) / (2 * dly);
-              ist[i] = (Math.PI * (qhx - qhc) * Math.sin(qyg)) / (2 * dly);
-              ivu[i] = (Math.PI * (qtn - qma) * Math.sin(qyg)) / (2 * dly);
-              jay[i] = (Math.PI * (qqs - qns) * Math.sin(qyg)) / (2 * dly);
-              qyg = qyg + dsx;
+            object.material.color.setHex(turquoise);
+            intersects = intersects.filter((line) => line.object.parent.apptype == APPTYPE.CLUSTER_LABEL);
+            activeCluster = intersects[0].object.parent;
+            var newTargetPosition = activeCluster.center;
+            activeCluster.visited = true;
+            var newCameraPosition = new THREE.Vector3();
+            newCameraPosition.copy(newTargetPosition);
+            var max = Math.max(Math.abs(newCameraPosition.x), Math.abs(newCameraPosition.z));
+            var multiply = (max - 30) / max;
+            newCameraPosition.x *= multiply;
+            newCameraPosition.y += cameraElevation;
+            newCameraPosition.z *= multiply;
+          
+            var tempX = 0.0;
+            for (let i = 0; i < animationSteps; i++) {
+              inc[i] = (Math.PI * (newCameraPosition.x - camera.position.x) * Math.sin(tempX)) / (2 * animationSteps);
+              iom[i] = (Math.PI * (newCameraPosition.y - camera.position.y) * Math.sin(tempX)) / (2 * animationSteps);
+              iqp[i] = (Math.PI * (newCameraPosition.z - camera.position.z) * Math.sin(tempX)) / (2 * animationSteps);
+              ist[i] = (Math.PI * (newTargetPosition.x - controls.target.x) * Math.sin(tempX)) / (2 * animationSteps);
+              ivu[i] = (Math.PI * (newTargetPosition.y - controls.target.y) * Math.sin(tempX)) / (2 * animationSteps);
+              jay[i] = (Math.PI * (newTargetPosition.z - controls.target.z) * Math.sin(tempX)) / (2 * animationSteps);
+              tempX = tempX + tempInc;
             }
             var rao = new THREE.Vector3();
-            rao.copy(qco);
-            rao.y -= dqx;
-            var rco = rao.distanceTo(qai);
-            qyg = Math.atan(qai.x / qai.z) + Math.PI / 2;
-            var rei = Math.sign(qai.x),
-              rgq = Math.sign(qai.z);
+            rao.copy(newCameraPosition);
+            rao.y -= cameraElevation;
+            var rco = rao.distanceTo(newTargetPosition);
+            tempX = Math.atan(newTargetPosition.x / newTargetPosition.z) + Math.PI / 2;
+            var rei = Math.sign(newTargetPosition.x),
+              rgq = Math.sign(newTargetPosition.z);
             for (let i = 0; i < dnw; i++) {
-              jhw[i] = rgq * rei * rco * Math.cos(qyg);
-              jmt[i] = -rgq * rco * Math.sin(qyg);
-              qyg = qyg - dvr;
+              jhw[i] = rgq * rei * rco * Math.cos(tempX);
+              jmt[i] = -rgq * rco * Math.sin(tempX);
+              tempX = tempX - dvr;
             }
             return;
           }
-          recenter(pqo);
+          recenter(object);
           render();
         }
       }
@@ -783,11 +761,11 @@
         }
         updateScene(rxq.position, true);
         var rwg = 0.0;
-        for (let i = 0; i < dly; i++) {
-          ieq[i] = (Math.PI * (rop - rny) * Math.sin(rwg)) / (2 * dly);
-          ihm[i] = (Math.PI * (rrl - rqj) * Math.sin(rwg)) / (2 * dly);
-          iky[i] = (Math.PI * (rui - rsp) * Math.sin(rwg)) / (2 * dly);
-          rwg = rwg + dsx;
+        for (let i = 0; i < animationSteps; i++) {
+          ieq[i] = (Math.PI * (rop - rny) * Math.sin(rwg)) / (2 * animationSteps);
+          ihm[i] = (Math.PI * (rrl - rqj) * Math.sin(rwg)) / (2 * animationSteps);
+          iky[i] = (Math.PI * (rui - rsp) * Math.sin(rwg)) / (2 * animationSteps);
+          rwg = rwg + tempInc;
         }
         if (
           camera.position.distanceTo(rxq.position) > 0.1 &&
@@ -855,7 +833,7 @@
               var sqj = new THREE.Line(spd, sbe);
               sqj.visible = false;
               sqj.shine = false;
-              sqj.apptype = APPTYPE.nrv;
+              sqj.apptype = APPTYPE.CONLINE;
               lines.push(sqj);
               scene.add(sqj);
             }
@@ -901,7 +879,7 @@
                   ? org
                   : mtr[i][j][k] > 1000
                   ? yll
-                  : fcg;
+                  : white;
               if (mtr[i][j][k] != 0) {
                 var utr = uwn(mtr[i][j][k] + "", 4.0, pti, clr);
                 densities.push(utr);
@@ -946,7 +924,7 @@
           tpm = new THREE.Color(),
           trt = tmg[0],
           tts = tmg[4];
-        tpm.setHex(ncn(tts));
+        tpm.setHex(getColorBySpectralType(tts));
         var tuv = new THREE.MeshBasicMaterial({ color: tpm }),
           twd = new THREE.Mesh(starGeometry, tuv),
           txk = plxToLy(tmg[3]);
@@ -1051,7 +1029,7 @@
       }
       
       function uwn(uya, uzf, vaw, ujm) {
-        var mww = ujm == undefined ? fcg : ujm;
+        var mww = ujm == undefined ? white : ujm;
         var vbq = new THREE.LineBasicMaterial({
           color: mww,
           side: THREE.DoubleSide,
@@ -1113,7 +1091,7 @@
               if (wbt.conGroup) {
                 vxv.push(wbt);
               }
-              eqo.push(...wbt.children);
+              conLabelLines.push(...wbt.children);
               constellationNames.push(wbt);
               scene.add(wbt);
             }
@@ -1155,10 +1133,10 @@
       function render() {
         StarVisuals.update();
         if (animation == ANIMATION.mzz) {
-          var wvv = ieq[dzv],
-            wxb = ihm[dzv],
-            wyd = iky[dzv];
-          dzv++;
+          var wvv = ieq[currentStep],
+            wxb = ihm[currentStep],
+            wyd = iky[currentStep];
+          currentStep++;
           var wzz = new THREE.Vector3(wvv, wxb, wyd);
           camera.position.add(wzz);
           controls.target.add(wzz);
@@ -1167,11 +1145,11 @@
             arrow.position.add(wzz);
             arrow.lookAt(clusters[progress - 6].center);
           }
-          if (dzv >= dly) {
+          if (currentStep >= animationSteps) {
             animation = null;
             updateScene(activeStar.position, false);
             clearScene();
-            dzv = 0;
+            currentStep = 0;
             if (params.Mode == EXPLORATORY_MODE && activeStar.name == STARS_TO_VISIT[progress - 1]) {
               showSmoothMessage("Well done! " + STARS_INFO[progress - 1]);
               var audio = new Audio("./files/paz.mp3");
@@ -1184,27 +1162,27 @@
             }
           }
         }
-        if (animation == ANIMATION.myz) {
-          fmq.position.copy(gdh[dly - dzv]);
-          fnv.position.copy(geq[dzv]);
-          dzv++;
-          fmq.lookAt(sun.position);
-          fnv.lookAt(sun.position);
-          if (dzv >= dly) {
+        if (animation == ANIMATION.CONS_SWAP) {
+          chosenCon.position.copy(chosenConSteps[animationSteps - currentStep]);
+          pairCon.position.copy(pairConSteps[currentStep]);
+          currentStep++;
+          chosenCon.lookAt(sun.position);
+          pairCon.lookAt(sun.position);
+          if (currentStep >= animationSteps) {
             animation = null;
-            fmq.children[0].material.color.setHex(fcg);
-            fnv.children[0].material.color.setHex(fcg);
-            fnv.conGroup = null;
-            fmq.conGroup = null;
-            fmq = null;
-            fnv = null;
+            chosenCon.children[0].material.color.setHex(white);
+            pairCon.children[0].material.color.setHex(white);
+            pairCon.conGroup = null;
+            chosenCon.conGroup = null;
+            chosenCon = null;
+            pairCon = null;
             var xbe = consLeft();
             if (xbe > 0) {
               showMessage(CONS_STAGE + "(" + xbe + "/10) left");
             } else {
               showMessage(CONS_COMPLETED);
               myl.classList.remove("hidden");
-              fhu = false;
+              conGameActive = false;
               myl.click();
               progress++;
               setTimeout(() => {
@@ -1213,29 +1191,29 @@
             }
           }
         }
-        if (animation == ANIMATION.mxm) {
+        if (animation == ANIMATION.CLUSTER_ONE) {
           if (activeStar != undefined) {
             showLabel(activeStar, false);
           }
-          var xcd = inc[dzv],
-            xdw = iom[dzv],
-            xfs = iqp[dzv],
-            xcw = ist[dzv],
-            xen = ivu[dzv],
-            xgj = jay[dzv];
-          dzv++;
+          var xcd = inc[currentStep],
+            xdw = iom[currentStep],
+            xfs = iqp[currentStep],
+            xcw = ist[currentStep],
+            xen = ivu[currentStep],
+            xgj = jay[currentStep];
+          currentStep++;
           var xhr = new THREE.Vector3(xcd, xdw, xfs),
             xiv = new THREE.Vector3(xcw, xen, xgj);
           camera.position.add(xhr);
           controls.target.add(xiv);
           camera.lookAt(controls.target);
-          if (dzv >= dly) {
+          if (currentStep >= animationSteps) {
             animation = ANIMATION.muc;
-            dzv = 0;
+            currentStep = 0;
             var audio = new Audio("./files/ekm.mp3");
             audio.volume = 0.5;
             audio.play();
-            if (params.Mode == EXPLORATORY_MODE && fzt.name == CLUSTERS_TO_VISIT[progress - 6]) {
+            if (params.Mode == EXPLORATORY_MODE && activeCluster.name == CLUSTERS_TO_VISIT[progress - 6]) {
               showSmoothMessage("Well done! " + CLUSTERS_INFO[progress - 6]);
               setTimeout(() => {
                 progress++;
@@ -1245,13 +1223,13 @@
           }
         }
         if (animation == ANIMATION.muc) {
-          var xcd = jhw[dzv] - jhw[dzv - 1];
-          var xfs = jmt[dzv] - jmt[dzv - 1];
-          dzv++;
+          var xcd = jhw[currentStep] - jhw[currentStep - 1];
+          var xfs = jmt[currentStep] - jmt[currentStep - 1];
+          currentStep++;
           var xhr = new THREE.Vector3(xcd, 0.0, xfs);
           camera.position.add(xhr);
           camera.lookAt(controls.target);
-          if (dzv >= dnw) {
+          if (currentStep >= dnw) {
             scene.add(arrow);
             arrow.position.x = controls.target.x;
             arrow.position.y = controls.target.y + 0.5;
@@ -1259,8 +1237,8 @@
             arrow.lookAt(clusters[progress - 6].center);
             controls.enabled = true;
             animation = null;
-            dzv = 0;
-            showConstellations(fld);
+            currentStep = 0;
+            showConstellations(constBefore);
           }
         }
         adjustStars();
