@@ -403,8 +403,8 @@
       var searchEl = document.querySelector(".c>input[type=text]");
       var myl = document.evaluate("//li[div[span[text()='Show constellations']]]", document, null, XPathResult.ANY_TYPE, null).iterateNext();
       myl.classList.add("hidden");
-      var showDensity = document.evaluate("//li[div[span[text()='Show density']]]", document, null, XPathResult.ANY_TYPE, null).iterateNext();
-      showDensity.classList.add("hidden");
+      var showDensityEl = document.evaluate("//li[div[span[text()='Show density']]]", document, null, XPathResult.ANY_TYPE, null).iterateNext();
+      showDensityEl.classList.add("hidden");
       var search = document.evaluate("//li[div[span[text()='Search']]]", document, null, XPathResult.ANY_TYPE, null).iterateNext();
       search.classList.add("hidden");
       await readColours();
@@ -543,7 +543,7 @@
               showArrow(false);
               clustersStageActive = false;
               search.classList.remove("hidden");
-              showDensity.classList.remove("hidden");
+              showDensityEl.classList.remove("hidden");
               showSmoothMessage(MODE_COMPLETED);
           }
         }
