@@ -937,6 +937,7 @@
         sphere.shine = true;
         sphere.apptype = APPTYPE.STAR;
         sphere.initialscale = sphere.scale.x;
+        sphere.spectralClass = spectralType ? (spectralType.match(/[OBAFGKMLTYXWDC]/) || [""])[0] : "";
         sphere.text = ly.toFixed(0) + " ly. Type " + params[1] + " Class " + spectralType + 
           (typeof size == "number" && size.toFixed(0) > 1 ? ". " + size.toFixed(0) + " Sun radii" : "");
         if (sphere == sun) {
