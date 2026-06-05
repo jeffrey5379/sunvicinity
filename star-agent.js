@@ -3,9 +3,8 @@ const StarAgent = (() => {
 
   // ─── State ───────────────────────────────────────────────────────────────────
   let _scene, _camera, _controls, _stars, _names;
-  let _lastClickedStar = null;
   let _highlights = [];
-  let _conversationHistory = [];
+  const _conversationHistory = [];
   let _isThinking = false;
   const SESSION_KEY = 'sa_api_key';
 
@@ -244,8 +243,7 @@ const StarAgent = (() => {
         if (!star || !star.position) continue;
 
         // Create a pulsing wireframe halo sphere
-        const geo = new THREE.SphereGeometry ? new THREE.SphereGeometry(0.8, 8, 8) : null;
-        if (!geo) break;
+        const geo = new THREE.SphereGeometry(0.8, 8, 8);
         const mat = new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: 0.25, wireframe: true });
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.copy(star.position);
@@ -460,7 +458,6 @@ Communication style: friendly, enthusiastic, concise. Respond in the user's lang
     if (!starMesh || !starMesh.name) return;
     const apptype = starMesh.apptype;
     if (apptype === 'ner' || apptype === 'njy' || apptype === 'non' || apptype === 'nrv') return;
-    _lastClickedStar = starMesh;
   }
 
   // ─── UI ──────────────────────────────────────────────────────────────────────
@@ -819,16 +816,16 @@ Communication style: friendly, enthusiastic, concise. Respond in the user's lang
     const msgs = document.getElementById('sa-messages');
     if (!msgs) return;
     if (active) {
-      dot && dot.classList.add('sa-busy');
-      send && (send.disabled = true);
+      if (dot) dot.classList.add('sa-busy');
+      if (send) send.disabled = true;
       const thinking = document.createElement('div');
       thinking.className = 'sa-thinking';
       thinking.innerHTML = `<div class="sa-dot"></div><div class="sa-dot"></div><div class="sa-dot"></div><span>Thinking...</span>`;
       msgs.appendChild(thinking);
       scrollMessages();
     } else {
-      dot && dot.classList.remove('sa-busy');
-      send && (send.disabled = false);
+      if (dot) dot.classList.remove('sa-busy');
+      if (send) send.disabled = false;
       const thinking = msgs.querySelector('.sa-thinking');
       if (thinking) thinking.remove();
       showSuggestions(true);

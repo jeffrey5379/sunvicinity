@@ -70,7 +70,7 @@ const StarVisuals = (() => {
   let _scene, _camera, _controls;
   let _points        = null;
   let _uniforms      = null;
-  let _lastTargetPos = new THREE.Vector3(Infinity);
+  const _lastTargetPos = new THREE.Vector3(Infinity);
 
   // ── Shaders ───────────────────────────────────────────────────────────────────
 
