@@ -767,7 +767,7 @@
         readConstellationData();
         var urls = [];
         for (var i = 1; i <= 12; i++) {
-          urls.push("./files/ydf" + i + ".txt");
+          urls.push("./files/star_data" + i + ".txt");
         }
         const requests = urls.map((url) => fetch(url));
         await Promise.all(requests)
@@ -1233,6 +1233,7 @@
           }
         }
         lastCachePoint.copy(position);
+        StarVisuals.rebuild(spheres);
       }
       
       function updateScene(position, show) {
