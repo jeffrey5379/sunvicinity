@@ -1016,7 +1016,7 @@
         shapes.push.apply(shapes, holeShapes);
         var label = new THREE.Object3D();
         for (var i = 0; i < shapes.length; i++) {
-          label.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(shapes[i].getPoints()), labelMat););
+          label.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(shapes[i].getPoints()), labelMat));
         }
         label.position.copy(position);
         return label;
