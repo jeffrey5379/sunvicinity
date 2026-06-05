@@ -27,13 +27,13 @@ const StarVisualsConfig = {
   // Values are linear RGB 0–1, tuned to match real star photography.
   // Set to null to use mesh.material.color as-is (original app color).
   spectralColors: {
-    O: { r: 0.61, g: 0.7, b: 1.0, glowMaxDist: 80.0 }, // hot blue
-    B: { r: 0.67, g: 0.75, b: 1.0, glowMaxDist: 70.0 }, // blue-white
-    A: { r: 0.84, g: 0.88, b: 1.0, glowMaxDist: 60.0 }, // white-blue
-    F: { r: 0.98, g: 0.96, b: 1.0, glowMaxDist: 50.0 }, // yellow-white
-    G: { r: 1.0, g: 0.93, b: 0.78, glowMaxDist: 40.0 }, // solar yellow
-    K: { r: 0.1, g: 0.9, b: 0.1, glowMaxDist: 30.0 }, // orange
-    M: { r: 1.0, g: 0.35, b: 0.15, noGlow: true }, // red dwarf — no glow
+    O: { r: 0.61, g: 0.7, b: 1.0, glowMaxDist: 100.0 }, // hot blue
+    B: { r: 0.67, g: 0.75, b: 1.0, glowMaxDist: 90.0 }, // blue-white
+    A: { r: 0.84, g: 0.88, b: 1.0, glowMaxDist: 80.0 }, // white-blue
+    F: { r: 0.98, g: 0.96, b: 1.0, glowMaxDist: 60.0 }, // yellow-white
+    G: { r: 1.0, g: 0.93, b: 0.78, glowMaxDist: 50.0 }, // solar yellow
+    K: { r: 0.1, g: 0.9, b: 0.1, glowMaxDist: 50.0 }, // orange
+    M: { r: 1.0, g: 0.35, b: 0.15, glowMaxDist: 20.0 }, // red dwarf — no glow
     C: { r: 0.9, g: 0.25, b: 0.08, noGlow: true }, // carbon star — no glow
     L: { r: 0.8, g: 0.2, b: 0.05, noGlow: true }, // brown dwarf — no glow
     T: { r: 0.7, g: 0.15, b: 0.05, noGlow: true }, // T-dwarf — no glow
@@ -54,7 +54,7 @@ const StarVisualsConfig = {
     F: 1.2, // F-type: yellow-white (Procyon, Canopus)
     G: 1.0, // G-type: solar analog — reference value
     K: 0.7, // K-type: orange stars (Arcturus, Aldebaran)
-    M: 0.25, // M-type: red dwarfs, intrinsically dim
+    M: 0.4, // M-type: red dwarfs, intrinsically dim
     C: 0.2, // C-type: carbon stars
     W: 1.9, // Wolf-Rayet: extremely hot and luminous
     D: 0.6, // White dwarfs: small but hot
@@ -115,7 +115,7 @@ const StarVisuals = (() => {
       float depth    = -mvPos.z;
       float baseSize = 4.0 + aBrightness * 160.0;
       float sized    = baseSize / max(depth * 0.012, 1.0);
-      gl_PointSize   = clamp(sized, 2.0, 220.0) * uPixelRatio;
+      gl_PointSize   = clamp(sized, 2.0, 350.0) * uPixelRatio;
     }
   `;
 
@@ -162,9 +162,14 @@ const StarVisuals = (() => {
       float b = vBrightness;
 
       // ── Halo ──────────────────────────────────────────────────────────────
-      float haloSigma = HALO_SIZE * 0.18;
-      float haloFade  = smoothstep(0.0, HALO_FADE_BELOW, vDistFromCam);
-      float halo = HALO_AMOUNT * haloFade * exp(-r * r / (haloSigma * haloSigma));
+      // sigma and amplitude grow with proximity, matching photographic bloom:
+      // at 10 ly: sigma≈0.10, amplitude=HALO_AMOUNT (tight halo)
+      // at  1 ly: sigma≈0.32, amplitude≈1.8×HALO_AMOUNT (wide bloom)
+      // at 0.3 ly: sigma clamped to 0.44 (fills sprite edge-to-edge)
+      float hCloseness = clamp(10.0 / max(vDistFromCam, 0.3), 1.0, 30.0);
+      float haloSigma  = clamp(HALO_SIZE * 0.10 * sqrt(hCloseness), 0.06, 0.44);
+      float haloAmp    = HALO_AMOUNT * clamp(pow(hCloseness, 0.25), 1.0, 2.5);
+      float halo       = haloAmp * exp(-r * r / (haloSigma * haloSigma));
 
       // ── Diffraction spikes ─────────────────────────────────────────────────
       float spikeFade = smoothstep(0.0, SPIKE_FADE_BELOW, vDistFromCam);
