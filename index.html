@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <title>Sun stellar neighborhood Nearby stars 3D</title>
@@ -49,23 +49,16 @@
       import { RenderPass } from "./jsm/postprocessing/RenderPass.js";
       import { ShaderPass } from "./jsm/postprocessing/ShaderPass.js";
       import { UnrealBloomPass } from "./jsm/postprocessing/UnrealBloomPass.js";
-
-      const WELCOME_MESSAGE =
-        "Welcome to the vicinity of the Sun. Switch to exploratory mode to study the mechanics of the model or navigate between stars in free mode.";
-      const FEEDBACK_MESSAGE =
-        "Your feedback is always welcome: jeffrey3829@proton.me";
-      const ABOUT_MESSAGE =
-        "Stars brightness and size not to scale. Do not consider as a source of reliable data. Please use Chrome for a better experience. This model has made use of the SIMBAD database, CDS, Strasbourg Astronomical Observatory, France.";
-      const CONS_STAGE =
-        "Looks like some constellations names are misplaced. Will you be able to find pairs of incorrectly named constellations? Click the constellations names which are out of place.";
+      
+      const WELCOME_MESSAGE = "Welcome to the vicinity of the Sun. Switch to exploratory mode to study the mechanics of the model or navigate between stars in free mode.";
+      const FEEDBACK_MESSAGE = "Your feedback is always welcome: jeffrey3829@proton.me";
+      const ABOUT_MESSAGE = "Stars brightness and size not to scale. Do not consider as a source of reliable data. Please use Chrome for a better experience. This model has made use of the SIMBAD database, CDS, Strasbourg Astronomical Observatory, France.";
+      const CONS_STAGE = "Looks like some constellations names are misplaced. Will you be able to find pairs of incorrectly named constellations? Click the constellations names which are out of place.";
       const CONS_HIT = "        Well done! Let's put them in their place.";
       const CONS_MISS = "                  No,these two are in place.";
-      const CONS_PART_MISS =
-        "            One of these two is misplaced. Take a closer look.";
-      const CONS_COMPLETED =
-        "Hooray! Now all constellations are in place. The setting to hide/show constellations is available now.";
-      const STARS_STAGE =
-        "Let's find the most interesting neighboring stars. Use 'Go to Sun' if you got lost. ";
+      const CONS_PART_MISS = "            One of these two is misplaced. Take a closer look.";
+      const CONS_COMPLETED = "Hooray! Now all constellations are in place. The setting to hide/show constellations is available now.";
+      const STARS_STAGE = "Let's find the most interesting neighboring stars. Use 'Go to Sun' if you got lost. ";
       const STARS_TO_VISIT = [
         "* alf CMa",
         "* alf Lyr",
@@ -87,15 +80,8 @@
         "Aldebaran is a red giant with a surface temperature of 3,900 K, it is over 400 times as luminous as the Sun.",
         "Arcturus is a red giant of spectral type K, an aging star around 7.1 billion years old.",
       ];
-      const CLUSTERS_STAGE =
-        "Looks like it's time to visit nearest star clusters. Move with WASD. Use mouse panning to correct the direction and the compas to navigate. Zoom in to see the compass.";
-      const CLUSTERS_TO_VISIT = [
-        "HYADES",
-        "PLEIADES",
-        "BEEHIVE",
-        "IC 2391",
-        "NGC 3532",
-      ];
+      const CLUSTERS_STAGE = "Looks like it's time to visit nearest star clusters. Move with WASD. Use mouse panning to correct the direction and the compas to navigate. Zoom in to see the compass.";
+      const CLUSTERS_TO_VISIT = ["HYADES", "PLEIADES", "BEEHIVE", "IC 2391", "NGC 3532"];
       const CLUSTERS_INSTRUCTIONS = [
         " The first stop is HYADES cluster in Taurus",
         " Next let's visit the PLEIADES cluster which is also in Taurus but a bit further",
@@ -110,8 +96,7 @@
         "IC 2391 is an open cluster in the constellation Vela consisting of hot, young, blueish stars, some of which binaries and one of which is a quadruple.",
         "NGC 3532 is an open cluster in the constellation Carina. Its population of approximately 150 stars of 7th magnitude or fainter includes seven red giants and seven white dwarfs.",
       ];
-      const MODE_COMPLETED =
-        "Exploratory mode completed. Search by star name is available now. You can also use density setting to find interesting areas in Sun surroundings.";
+      const MODE_COMPLETED = "Exploratory mode completed. Search by star name is available now. You can also use density setting to find interesting areas in Sun surroundings.";
       const EXPLORATORY_MODE = "Exploratory";
       const APPTYPE = {
         CONLINE: "CONLINE",
@@ -120,12 +105,7 @@
         CLUSTER_LABEL: "CLUSTER_LABEL",
         BLACK_HOLE: "BLACK_HOLE",
       };
-      const ANIMATION = {
-        RECENTER: "RECENTER",
-        CONS_SWAP: "CONS_SWAP",
-        CLUSTER_ONE: "CLUSTER_ONE",
-        CLUSTER_TWO: "CLUSTER_TWO",
-      };
+      const ANIMATION = { RECENTER: "RECENTER", CONS_SWAP: "CONS_SWAP", CLUSTER_ONE: "CLUSTER_ONE", CLUSTER_TWO: "CLUSTER_TWO" };
       var scene, camera, controls, renderer;
       const SUN_DIAMETER = 1391400,
         DEFAULT_RADIUS = 0.01;
@@ -177,8 +157,7 @@
         starGeometry = new THREE.IcosahedronBufferGeometry(1, 4);
       var progress = 0,
         SMOOTH_MESSAGE_TIMEOUT = 30,
-        mouseDownX,
-        mouseDownY;
+        mouseDownX, mouseDownY;
       var xSteps = [],
         ySteps = [],
         zSteps = [],
@@ -222,12 +201,7 @@
       const info = document.getElementById("info");
       var tempMessage, oldText;
       scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(
-        40,
-        window.innerWidth / window.innerHeight,
-        0.1,
-        50000.0,
-      );
+      camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 50000.0);
       camera.position.set(0, 0, 3);
       camera.lookAt(0, 0, 0);
       controls = new OrbitControls(camera, renderer.domElement);
@@ -237,12 +211,7 @@
       controls.enablePan = false;
       controls.addEventListener("change", render);
       var renderScene = new RenderPass(scene, camera);
-      var bloomPass = new UnrealBloomPass(
-        new THREE.Vector2(window.innerWidth, window.innerHeight),
-        1.5,
-        0.4,
-        0.85,
-      );
+      var bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
       bloomPass.threshold = params.bloomThreshold;
       bloomPass.strength = params.bloomStrength;
       bloomPass.radius = params.bloomRadius;
@@ -260,7 +229,7 @@
           fragmentShader: document.getElementById("fragmentshader").textContent,
           defines: {},
         }),
-        "baseTexture",
+        "baseTexture"
       );
       shaderPass.needsSwap = true;
       var finalComposer = new EffectComposer(renderer);
@@ -283,9 +252,7 @@
           dx = (camera.position.x - controls.target.x) / 100.0;
           dy = (camera.position.y - controls.target.y) / 100.0;
           dz = (camera.position.z - controls.target.z) / 100.0;
-          var multiply = Math.floor(
-            0.8 / Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz)),
-          );
+          var multiply = Math.floor(0.8 / Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz)));
           if (multiply > 0) {
             dx *= multiply;
             dy *= multiply;
@@ -332,8 +299,7 @@
       });
       var gui = new GUI();
       gui.width = 300;
-      gui
-        .add(params, "Mode", ["Free", "Exploratory"])
+      gui.add(params, "Mode", ["Free", "Exploratory"])
         .onChange(function (value) {
           switch (value) {
             case "Free":
@@ -347,26 +313,21 @@
               break;
           }
         });
-      gui
-        .add(params, "showConstellations")
+      gui.add(params, "showConstellations")
         .name("Show constellations")
         .onChange(function (value) {
           showConstellations(value);
         });
-      gui
-        .add(params, "showDensity")
+      gui.add(params, "showDensity")
         .name("Show density")
         .onChange(function (value) {
           showDensity(value);
         });
-
+      
       function showDensity(value) {
         params.showDensity = value;
         for (var density of densities) {
-          if (
-            value &&
-            density.position.distanceTo(controls.target) < densityDistance
-          ) {
+          if (value && density.position.distanceTo(controls.target) < densityDistance) {
             scene.add(density);
           }
           if (!value) {
@@ -374,7 +335,7 @@
           }
         }
       }
-
+      
       function showConstellations(value) {
         params.showConstellations = value;
         for (let line of lines) {
@@ -384,12 +345,11 @@
           name.visible = value;
         }
       }
-
+      
       function consLeft() {
-        return constellationNames.filter((name) => name.conGroup != null)
-          .length;
+        return constellationNames.filter((name) => name.conGroup != null).length;
       }
-
+      
       var goToSun = {
         goToSun: function () {
           if (controls.position != sun.position) {
@@ -414,8 +374,7 @@
         }
         this.setValue("");
       });
-      gui
-        .add(params, "Info", ["None", "About", "Feedback"])
+      gui.add(params, "Info", ["None", "About", "Feedback"])
         .onChange(function (value) {
           switch (value) {
             case "None":
@@ -434,47 +393,17 @@
           }
         });
       var searchEl = document.querySelector(".c>input[type=text]");
-      var showConstEl = document
-        .evaluate(
-          "//li[div[span[text()='Show constellations']]]",
-          document,
-          null,
-          XPathResult.ANY_TYPE,
-          null,
-        )
-        .iterateNext();
+      var showConstEl = document.evaluate("//li[div[span[text()='Show constellations']]]", document, null, XPathResult.ANY_TYPE, null).iterateNext();
       showConstEl.classList.add("hidden");
-      var showDensityEl = document
-        .evaluate(
-          "//li[div[span[text()='Show density']]]",
-          document,
-          null,
-          XPathResult.ANY_TYPE,
-          null,
-        )
-        .iterateNext();
+      var showDensityEl = document.evaluate("//li[div[span[text()='Show density']]]", document, null, XPathResult.ANY_TYPE, null).iterateNext();
       showDensityEl.classList.add("hidden");
-      var search = document
-        .evaluate(
-          "//li[div[span[text()='Search']]]",
-          document,
-          null,
-          XPathResult.ANY_TYPE,
-          null,
-        )
-        .iterateNext();
+      var search = document.evaluate("//li[div[span[text()='Search']]]", document, null, XPathResult.ANY_TYPE, null).iterateNext();
       search.classList.add("hidden");
       await readColours();
       await readNames();
       await readClusters();
       await setupScene();
-      StarAgent.init({
-        scene: scene,
-        camera: camera,
-        controls: controls,
-        stars: starPositions,
-        names: starNames,
-      });
+      StarAgent.init({ scene: scene, camera: camera, controls: controls, stars: starPositions, names: starNames });
       naj();
       function naj() {
         setTimeout(function () {
@@ -482,7 +411,7 @@
         }, 15);
         render();
       }
-
+      
       function getColorBySpectralType(spectralType) {
         for (let colour of starColours) {
           for (let type of colour["types"]) {
@@ -491,12 +420,10 @@
             }
           }
         }
-        console.warn(
-          "Cannot determine colour for spectral type: " + spectralType,
-        );
+        console.warn("Cannot determine colour for spectral type: " + spectralType);
         return [0.0, 0.9, 0.0];
       }
-
+      
       function readColours() {
         fetch("./files/wub.txt")
           .then((res) => res.text())
@@ -513,7 +440,7 @@
           })
           .catch((e) => console.error(e));
       }
-
+      
       function readNames() {
         fetch("./files/efs.txt")
           .then((res) => res.text())
@@ -528,7 +455,7 @@
           })
           .catch((e) => console.error(e));
       }
-
+      
       function readClusters() {
         fetch("./files/baz.txt")
           .then((res) => res.text())
@@ -539,19 +466,11 @@
                 distance = data[2],
                 center = data[3].split(" "),
                 clusterLabel = createLabel(data[0], 1.0, controls.target);
-              clusterLabel.position.setFromSphericalCoords(
-                distance,
-                coord[0],
-                coord[1],
-              );
+              clusterLabel.position.setFromSphericalCoords(distance, coord[0], coord[1]);
               clusterLabel.apptype = APPTYPE.CLUSTER_LABEL;
               clusterLabel.name = data[0];
               clusterLabel.center = new THREE.Vector3();
-              clusterLabel.center.setFromSphericalCoords(
-                distance,
-                center[0],
-                center[1],
-              );
+              clusterLabel.center.setFromSphericalCoords(distance, center[0], center[1]);
               var lookAt = new THREE.Vector3();
               lookAt.y = clusterLabel.position.y;
               clusterLabel.lookAt(lookAt);
@@ -561,18 +480,14 @@
           })
           .catch((e) => console.error(e));
       }
-
+      
       function onSphereHover(event) {
         event.preventDefault();
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
         raycaster.setFromCamera(mouse, camera);
         var intersects = raycaster.intersectObjects(scene.children);
-        if (
-          intersects.length > 0 &&
-          !animation &&
-          intersects[0].object.text != undefined
-        ) {
+        if (intersects.length > 0 && !animation && intersects[0].object.text != undefined) {
           var object = intersects[0].object;
           if (object != activeStar) {
             showState(object.name);
@@ -581,7 +496,7 @@
           showState("");
         }
       }
-
+      
       function showInfo(smooth) {
         if (params.Mode == "Free") {
           if (smooth) {
@@ -625,7 +540,7 @@
           }
         }
       }
-
+      
       function showArrow(show) {
         if (show) {
           var geometry = new THREE.CylinderBufferGeometry(0, 0.03, 0.15, 24);
@@ -641,13 +556,13 @@
           scene.remove(arrow);
         }
       }
-
+      
       function onDocumentMouseDown(event) {
         mouseDownX = event.clientX;
         mouseDownY = event.clientY;
         showState("");
       }
-
+      
       async function onDocumentMouseUp(event) {
         if (!searchEl.contains(event.target)) {
           searchEl.blur();
@@ -664,9 +579,7 @@
         }
         raycaster.setFromCamera(mouse, camera);
         var intersects = raycaster.intersectObjects(scene.children);
-        var isAllConlines =
-          intersects.length > 0 &&
-          intersects.every((obj) => obj.object.apptype == APPTYPE.CONLINE);
+        var isAllConlines = intersects.length > 0 && intersects.every((obj) => obj.object.apptype == APPTYPE.CONLINE);
         if (
           intersects.length > 1 &&
           intersects[0].object.position.distanceTo(camera.position) < 0.1
@@ -709,11 +622,7 @@
             return;
           }
           currentStep = 0;
-          if (
-            object.type === "Line" &&
-            object.parent.apptype == APPTYPE.CONLABEL &&
-            conGameActive
-          ) {
+          if (object.type === "Line" && object.parent.apptype == APPTYPE.CONLABEL && conGameActive) {
             object.material.color.setHex(turquoise);
             if (chosenCon == null) {
               chosenCon = object.parent;
@@ -723,10 +632,7 @@
               if (pairCon == chosenCon) {
                 return;
               }
-              if (
-                pairCon.conGroup != null &&
-                pairCon.conGroup == chosenCon.conGroup
-              ) {
+              if (pairCon.conGroup != null && pairCon.conGroup == chosenCon.conGroup) {
                 showMessage(CONS_HIT);
                 var centerX = (pairCon.position.x + chosenCon.position.x) / 2,
                   centerY = (pairCon.position.y + chosenCon.position.y) / 2,
@@ -736,9 +642,9 @@
                   new THREE.Vector3(
                     (3 * centerX) / 4,
                     (5 * centerY) / 4,
-                    (3 * centerZ) / 4,
+                    (3 * centerZ) / 4
                   ),
-                  chosenCon.position,
+                  chosenCon.position
                 );
                 chosenConSteps = firstCurve.getPoints(animationSteps);
                 const secondCurve = new THREE.QuadraticBezierCurve3(
@@ -746,9 +652,9 @@
                   new THREE.Vector3(
                     (5 * centerX) / 4,
                     (3 * centerY) / 4,
-                    (5 * centerZ) / 4,
+                    (5 * centerZ) / 4
                   ),
-                  chosenCon.position,
+                  chosenCon.position
                 );
                 pairConSteps = secondCurve.getPoints(animationSteps);
                 animation = ANIMATION.CONS_SWAP;
@@ -766,15 +672,10 @@
             }
             return;
           }
-          if (
-            object.type === "Line" &&
-            object.parent.apptype == APPTYPE.CLUSTER_LABEL &&
-            clustersStageActive
-          ) {
+          if (object.type === "Line" && object.parent.apptype == APPTYPE.CLUSTER_LABEL && clustersStageActive) {
             if (
               object.parent.visited ||
-              camera.position.distanceTo(object.parent.position) >
-                discoverDistance
+              camera.position.distanceTo(object.parent.position) > discoverDistance
             ) {
               return;
             }
@@ -787,74 +688,36 @@
             controls.enabled = false;
             scene.remove(arrow);
             object.material.color.setHex(turquoise);
-            intersects = intersects.filter(
-              (line) => line.object.parent.apptype == APPTYPE.CLUSTER_LABEL,
-            );
+            intersects = intersects.filter((line) => line.object.parent.apptype == APPTYPE.CLUSTER_LABEL);
             activeCluster = intersects[0].object.parent;
             var newTargetPosition = activeCluster.center;
             activeCluster.visited = true;
             var newCameraPosition = new THREE.Vector3();
             newCameraPosition.copy(newTargetPosition);
-            var max = Math.max(
-              Math.abs(newCameraPosition.x),
-              Math.abs(newCameraPosition.z),
-            );
+            var max = Math.max(Math.abs(newCameraPosition.x), Math.abs(newCameraPosition.z));
             var multiply = (max - 30) / max;
             newCameraPosition.x *= multiply;
             newCameraPosition.y += cameraElevation;
             newCameraPosition.z *= multiply;
-
+          
             var tempX = 0.0;
             for (let i = 0; i < animationSteps; i++) {
-              cameraXsteps[i] =
-                (Math.PI *
-                  (newCameraPosition.x - camera.position.x) *
-                  Math.sin(tempX)) /
-                (2 * animationSteps);
-              cameraYsteps[i] =
-                (Math.PI *
-                  (newCameraPosition.y - camera.position.y) *
-                  Math.sin(tempX)) /
-                (2 * animationSteps);
-              cameraZsteps[i] =
-                (Math.PI *
-                  (newCameraPosition.z - camera.position.z) *
-                  Math.sin(tempX)) /
-                (2 * animationSteps);
-              targetXsteps[i] =
-                (Math.PI *
-                  (newTargetPosition.x - controls.target.x) *
-                  Math.sin(tempX)) /
-                (2 * animationSteps);
-              targetYsteps[i] =
-                (Math.PI *
-                  (newTargetPosition.y - controls.target.y) *
-                  Math.sin(tempX)) /
-                (2 * animationSteps);
-              targetZsteps[i] =
-                (Math.PI *
-                  (newTargetPosition.z - controls.target.z) *
-                  Math.sin(tempX)) /
-                (2 * animationSteps);
+              cameraXsteps[i] = (Math.PI * (newCameraPosition.x - camera.position.x) * Math.sin(tempX)) / (2 * animationSteps);
+              cameraYsteps[i] = (Math.PI * (newCameraPosition.y - camera.position.y) * Math.sin(tempX)) / (2 * animationSteps);
+              cameraZsteps[i] = (Math.PI * (newCameraPosition.z - camera.position.z) * Math.sin(tempX)) / (2 * animationSteps);
+              targetXsteps[i] = (Math.PI * (newTargetPosition.x - controls.target.x) * Math.sin(tempX)) / (2 * animationSteps);
+              targetYsteps[i] = (Math.PI * (newTargetPosition.y - controls.target.y) * Math.sin(tempX)) / (2 * animationSteps);
+              targetZsteps[i] = (Math.PI * (newTargetPosition.z - controls.target.z) * Math.sin(tempX)) / (2 * animationSteps);
               tempX = tempX + tempInc;
             }
             var tempVar = new THREE.Vector3();
             tempVar.copy(newCameraPosition);
             tempVar.y -= cameraElevation;
             var rotationRadius = tempVar.distanceTo(newTargetPosition);
-            tempX =
-              Math.atan(newTargetPosition.x / newTargetPosition.z) +
-              Math.PI / 2;
+            tempX = Math.atan(newTargetPosition.x / newTargetPosition.z) + Math.PI / 2;
             for (let i = 0; i < clusterAnimationSteps; i++) {
-              cameraXstepsTwo[i] =
-                Math.sign(newTargetPosition.z) *
-                Math.sign(newTargetPosition.x) *
-                rotationRadius *
-                Math.cos(tempX);
-              cameraZstepsTwo[i] =
-                -Math.sign(newTargetPosition.z) *
-                rotationRadius *
-                Math.sin(tempX);
+              cameraXstepsTwo[i] = Math.sign(newTargetPosition.z) * Math.sign(newTargetPosition.x) * rotationRadius * Math.cos(tempX);
+              cameraZstepsTwo[i] = -Math.sign(newTargetPosition.z) * rotationRadius * Math.sin(tempX);
               tempX = tempX - clustTempInc;
             }
             return;
@@ -863,7 +726,7 @@
           render();
         }
       }
-
+      
       window.onresize = function () {
         var width = window.innerWidth,
           height = window.innerHeight;
@@ -874,7 +737,7 @@
         finalComposer.setSize(width, height);
         render();
       };
-
+      
       function recenter(object) {
         StarAgent.notifyStarClick(object);
         animation = ANIMATION.RECENTER;
@@ -884,44 +747,27 @@
         updateScene(object.position, true);
         var tempX = 0.0;
         for (let i = 0; i < animationSteps; i++) {
-          xSteps[i] =
-            (Math.PI *
-              (object.position.x - controls.target.x) *
-              Math.sin(tempX)) /
-            (2 * animationSteps);
-          ySteps[i] =
-            (Math.PI *
-              (object.position.y - controls.target.y) *
-              Math.sin(tempX)) /
-            (2 * animationSteps);
-          zSteps[i] =
-            (Math.PI *
-              (object.position.z - controls.target.z) *
-              Math.sin(tempX)) /
-            (2 * animationSteps);
+          xSteps[i] = (Math.PI * (object.position.x - controls.target.x) * Math.sin(tempX)) / (2 * animationSteps);
+          ySteps[i] = (Math.PI * (object.position.y - controls.target.y) * Math.sin(tempX)) / (2 * animationSteps);
+          zSteps[i] = (Math.PI * (object.position.z - controls.target.z) * Math.sin(tempX)) / (2 * animationSteps);
           tempX = tempX + tempInc;
         }
-        if (
-          camera.position.distanceTo(object.position) > 0.1 &&
-          object.text != undefined
-        ) {
+        if (camera.position.distanceTo(object.position) > 0.1 && object.text != undefined) {
           showLabel(object, true);
         }
         if (object.apptype == APPTYPE.STAR) {
           activeStar = object;
         }
       }
-
+      
       async function setupScene() {
         scene.traverse(disposeMaterial);
         scene.children.length = 0;
-        const constellationLineMaterial = new THREE.LineBasicMaterial({
-          color: gray,
-        });
+        const constellationLineMaterial = new THREE.LineBasicMaterial({ color: gray });
         readConstellationData();
         var urls = [];
         for (var i = 1; i <= 12; i++) {
-          urls.push("./files/star_data" + i + ".txt");
+          urls.push("./files/ydf" + i + ".txt");
         }
         const requests = urls.map((url) => fetch(url));
         await Promise.all(requests)
@@ -941,10 +787,7 @@
               position.data = star;
               position.position = createPosition(star);
               starPositions.push(position);
-              if (
-                position.position.distanceTo(sunPosition) < cacheDistance ||
-                constellationStar(position.name)
-              ) {
+              if (position.position.distanceTo(sunPosition) < cacheDistance || constellationStar(position.name)) {
                 var sphere = createStar(star);
                 for (let line of constellations) {
                   for (let star of line) {
@@ -954,9 +797,7 @@
                   }
                 }
                 spheres.push(sphere);
-                if (
-                  lazyLoadDistance > controls.target.distanceTo(sphere.position)
-                ) {
+                if (lazyLoadDistance > controls.target.distanceTo(sphere.position)) {
                   scene.add(sphere);
                 }
               }
@@ -970,13 +811,8 @@
                 constellationPoints.push(star.position);
               }
               constellationLines.push(constellationPoints);
-              var lineGeometry = new THREE.BufferGeometry().setFromPoints(
-                constellationPoints,
-              );
-              var line = new THREE.Line(
-                lineGeometry,
-                constellationLineMaterial,
-              );
+              var lineGeometry = new THREE.BufferGeometry().setFromPoints(constellationPoints);
+              var line = new THREE.Line(lineGeometry, constellationLineMaterial);
               line.visible = false;
               line.shine = false;
               line.apptype = APPTYPE.CONLINE;
@@ -984,12 +820,7 @@
               scene.add(line);
             }
             showLabel(activeStar, true);
-            StarVisuals.init({
-              scene: scene,
-              camera: camera,
-              controls: controls,
-              stars: spheres,
-            });
+            StarVisuals.init({ scene: scene, camera: camera, controls: controls, stars: spheres });
           })
           .catch((e) => console.error(e));
         showInfo(true);
@@ -997,7 +828,7 @@
         showGalaxyCenter();
         render();
       }
-
+      
       function initDensities() {
         var cellSize = 100.0,
           bound = 2000.0,
@@ -1023,28 +854,18 @@
               position.x = (i - 20) * cellSize + cellSize / 2;
               position.y = (j - 20) * cellSize + cellSize / 2;
               position.z = (k - 20) * cellSize + cellSize / 2;
-              var clr =
-                matrix[i][j][k] > 2000
-                  ? red
-                  : matrix[i][j][k] > 1500
-                    ? orange
-                    : matrix[i][j][k] > 1000
-                      ? yellow
-                      : white;
+              var clr = matrix[i][j][k] > 2000 ? red
+                                      : matrix[i][j][k] > 1500 ? orange 
+                                                  : matrix[i][j][k] > 1000 ? yellow : white;
               if (matrix[i][j][k] != 0) {
-                var label = createLabel(
-                  matrix[i][j][k] + "",
-                  4.0,
-                  position,
-                  clr,
-                );
+                var label = createLabel(matrix[i][j][k] + "", 4.0, position, clr);
                 densities.push(label);
               }
             }
           }
         }
       }
-
+      
       function showGalaxyCenter() {
         var sagAMaterial = new THREE.MeshBasicMaterial({ color: 0x100500 });
         var sagA = new THREE.Mesh(starGeometry, sagAMaterial);
@@ -1054,7 +875,7 @@
         sagA.apptype = APPTYPE.BLACK_HOLE;
         scene.add(sagA);
       }
-
+      
       function constellationStar(starName) {
         for (let line of constellations) {
           for (let star of line) {
@@ -1065,18 +886,14 @@
         }
         return false;
       }
-
+      
       function createPosition(star) {
         var params = star.split("|"),
           ly = plxToLy(params[3]),
           coord = params[2].split(" ");
-        return new THREE.Vector3().setFromSphericalCoords(
-          ly,
-          Math.PI / 2 - degreesToRad(coord[1]),
-          degreesToRad(coord[0]),
-        );
+        return new THREE.Vector3().setFromSphericalCoords(ly, Math.PI / 2 - degreesToRad(coord[1]), degreesToRad(coord[0]));
       }
-
+      
       function createStar(star) {
         var params = star.split("|"),
           color = new THREE.Color(),
@@ -1121,21 +938,14 @@
         sphere.apptype = APPTYPE.STAR;
         sphere.initialscale = sphere.scale.x;
         sphere.spectralClass = spectralType ? (spectralType.match(/[OBAFGKMLTYXWDC]/) || [""])[0] : "";
-        sphere.text =
-          ly.toFixed(0) +
-          " ly. Type " +
-          params[1] +
-          " Class " +
-          spectralType +
-          (typeof size == "number" && size.toFixed(0) > 1
-            ? ". " + size.toFixed(0) + " Sun radii"
-            : "");
+        sphere.text = ly.toFixed(0) + " ly. Type " + params[1] + " Class " + spectralType + 
+          (typeof size == "number" && size.toFixed(0) > 1 ? ". " + size.toFixed(0) + " Sun radii" : "");
         if (sphere == sun) {
           sphere.text = "Class " + spectralType;
         }
         return sphere;
       }
-
+      
       async function showSmoothMessage(message) {
         actualMessage = message;
         for (var i = 0; i <= message.length; i++) {
@@ -1146,7 +956,7 @@
           }
         }
       }
-
+      
       async function showMessage(message, timeout) {
         if (!tempMessage) {
           oldText = info.innerText;
@@ -1159,11 +969,11 @@
           tempMessage = false;
         }
       }
-
+      
       function showState(message) {
         state.innerText = message;
       }
-
+      
       function showLabel(sphere, show) {
         if (!show) {
           scene.remove(sphere.labelPrimary);
@@ -1173,10 +983,9 @@
             var position = new THREE.Vector3(
               sphere.position.x + 3 * sphere.initialscale,
               sphere.position.y,
-              sphere.position.z,
+              sphere.position.z
             );
-            var name =
-              sphere.secondName != undefined
+            var name = sphere.secondName != undefined
                 ? sphere.secondName + " (" + sphere.name + ")"
                 : sphere.name;
             sphere.labelPrimary = createLabel(name, 0.02, position);
@@ -1187,7 +996,7 @@
           }
         }
       }
-
+      
       function createLabel(message, size, position, color) {
         var matColor = color == undefined ? white : color;
         var labelMat = new THREE.LineBasicMaterial({
@@ -1208,17 +1017,12 @@
         shapes.push.apply(shapes, holeShapes);
         var label = new THREE.Object3D();
         for (var i = 0; i < shapes.length; i++) {
-          label.add(
-            new THREE.Line(
-              new THREE.BufferGeometry().setFromPoints(shapes[i].getPoints()),
-              labelMat,
-            ),
-          );
+          label.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(shapes[i].getPoints()), labelMat));
         }
         label.position.copy(position);
         return label;
       }
-
+      
       function readConstellationData() {
         fetch("./files/guz.txt")
           .then((res) => res.text())
@@ -1261,16 +1065,14 @@
               for (let conLabel of groups) {
                 if (first != conLabel && first.conGroup == conLabel.conGroup) {
                   swapConsOnInit(first, conLabel);
-                  groups = groups.filter(
-                    (label) => label.conGroup != first.conGroup,
-                  );
+                  groups = groups.filter((label) => label.conGroup != first.conGroup);
                 }
               }
             }
           })
           .catch((e) => console.error(e));
       }
-
+      
       function swapConsOnInit(first, second) {
         var position = first.position.clone();
         first.position.copy(second.position);
@@ -1278,29 +1080,25 @@
         first.lookAt(0.0, 0.0, 0.0);
         second.lookAt(0.0, 0.0, 0.0);
       }
-
+      
       function plxToLy(plx) {
         return 3261.56 / plx;
       }
-
+      
       function degreesToRad(degrees) {
         return (degrees * Math.PI) / 180.0;
       }
-
+      
       function disposeMaterial(obj) {
         if (obj.material) {
           obj.material.dispose();
         }
       }
-
+      
       function render() {
         StarVisuals.update();
         if (animation == ANIMATION.RECENTER) {
-          var move = new THREE.Vector3(
-            xSteps[currentStep],
-            ySteps[currentStep],
-            zSteps[currentStep],
-          );
+          var move = new THREE.Vector3(xSteps[currentStep], ySteps[currentStep], zSteps[currentStep]);
           currentStep++;
           camera.position.add(move);
           controls.target.add(move);
@@ -1314,10 +1112,7 @@
             updateScene(activeStar.position, false);
             clearScene();
             currentStep = 0;
-            if (
-              params.Mode == EXPLORATORY_MODE &&
-              activeStar.name == STARS_TO_VISIT[progress - 1]
-            ) {
+            if (params.Mode == EXPLORATORY_MODE && activeStar.name == STARS_TO_VISIT[progress - 1]) {
               showSmoothMessage("Well done! " + STARS_INFO[progress - 1]);
               var audio = new Audio("./files/paz.mp3");
               audio.volume = 0.5;
@@ -1362,17 +1157,9 @@
           if (activeStar != undefined) {
             showLabel(activeStar, false);
           }
-
-          var cameramove = new THREE.Vector3(
-              cameraXsteps[currentStep],
-              cameraYsteps[currentStep],
-              cameraZsteps[currentStep],
-            ),
-            targetmove = new THREE.Vector3(
-              targetXsteps[currentStep],
-              targetYsteps[currentStep],
-              targetZsteps[currentStep],
-            );
+          
+          var cameramove = new THREE.Vector3(cameraXsteps[currentStep], cameraYsteps[currentStep], cameraZsteps[currentStep]),
+            targetmove = new THREE.Vector3(targetXsteps[currentStep], targetYsteps[currentStep], targetZsteps[currentStep]);
           currentStep++;
           camera.position.add(cameramove);
           controls.target.add(targetmove);
@@ -1383,10 +1170,7 @@
             var audio = new Audio("./files/ekm.mp3");
             audio.volume = 0.5;
             audio.play();
-            if (
-              params.Mode == EXPLORATORY_MODE &&
-              activeCluster.name == CLUSTERS_TO_VISIT[progress - 6]
-            ) {
+            if (params.Mode == EXPLORATORY_MODE && activeCluster.name == CLUSTERS_TO_VISIT[progress - 6]) {
               showSmoothMessage("Well done! " + CLUSTERS_INFO[progress - 6]);
               setTimeout(() => {
                 progress++;
@@ -1396,11 +1180,8 @@
           }
         }
         if (animation == ANIMATION.CLUSTER_TWO) {
-          var cameramove = new THREE.Vector3(
-            cameraXstepsTwo[currentStep] - cameraXstepsTwo[currentStep - 1],
-            0.0,
-            cameraZstepsTwo[currentStep] - cameraZstepsTwo[currentStep - 1],
-          );
+          
+          var cameramove = new THREE.Vector3(cameraXstepsTwo[currentStep] - cameraXstepsTwo[currentStep - 1], 0.0, cameraZstepsTwo[currentStep] - cameraZstepsTwo[currentStep - 1]);
           currentStep++;
           camera.position.add(cameramove);
           camera.lookAt(controls.target);
@@ -1420,18 +1201,14 @@
         renderBloom();
         finalComposer.render();
       }
-
+      
       function adjustStars() {
         for (var obj of scene.children) {
           if (obj.apptype == APPTYPE.STAR) {
             var distance = obj.position.distanceTo(camera.position);
-            var red =
-              obj.material.color.g == 0.0 && obj.material.color.b == 0.0;
+            var red = obj.material.color.g == 0.0 && obj.material.color.b == 0.0;
             var k = Math.sqrt(2 * distance) / 3;
-            if (
-              distance > lazyLoadDistance &&
-              obj.initialscale != DEFAULT_RADIUS
-            ) {
+            if (distance > lazyLoadDistance && obj.initialscale != DEFAULT_RADIUS) {
               continue;
             }
             if ((k < 1 && k > 0.5) || (!red && k > 1)) {
@@ -1440,15 +1217,13 @@
           }
         }
       }
-
+      
       function clearScene() {
-        for (var sphere of scene.children.filter(
-          (obj) => obj.apptype == APPTYPE.STAR && !spheres.includes(obj),
-        )) {
+        for (var sphere of scene.children.filter((obj) => obj.apptype == APPTYPE.STAR && !spheres.includes(obj))) {
           scene.remove(sphere);
         }
       }
-
+      
       function recalculateCache(position) {
         spheres = [];
         for (var star of starPositions) {
@@ -1459,7 +1234,7 @@
         }
         lastCachePoint.copy(position);
       }
-
+      
       function updateScene(position, show) {
         if (lastCachePoint.distanceTo(position) > cacheDistance / 2) {
           recalculateCache(position);
@@ -1473,27 +1248,20 @@
               foundStar = undefined;
             }
           }
-          if (
-            !show &&
-            sphere.position.distanceTo(position) > lazyLoadDistance
-          ) {
+          if (!show && sphere.position.distanceTo(position) > lazyLoadDistance) {
             scene.remove(sphere);
           }
         }
-
+        
         for (var density of densities) {
-          if (
-            show &&
-            params.showDensity &&
-            density.position.distanceTo(position) < 500
-          ) {
+          if (show && params.showDensity && density.position.distanceTo(position) < 500) {
             scene.add(density);
           }
           if (!show && density.position.distanceTo(position) > 500) {
             scene.remove(density);
           }
         }
-
+        
         for (var cluster of clusters) {
           if (discoverDistance > position.distanceTo(cluster.position)) {
             scene.add(cluster);
@@ -1503,20 +1271,20 @@
         }
         console.log("Scene objects " + scene.children.length);
       }
-
+      
       function renderBloom() {
         scene.traverse(darkenNonBloomed);
         composer.render();
         scene.traverse(restoreMaterial);
       }
-
+      
       function darkenNonBloomed(obj) {
         if (!obj.shine) {
           materials[obj.uuid] = obj.material;
           obj.material = darkMaterial;
         }
       }
-
+      
       function restoreMaterial(obj) {
         if (materials[obj.uuid]) {
           obj.material = materials[obj.uuid];
