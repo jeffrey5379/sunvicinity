@@ -825,11 +825,22 @@ Communication style: friendly, enthusiastic, concise. Respond in the user's lang
       if (val) sendMessage(val);
     };
     document.getElementById("sa-input").addEventListener("keydown", (e) => {
-      e.stopPropagation(); // prevent dat.GUI from intercepting keys (e.g. H = hide toggle)
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         const val = e.target.value.trim();
         if (val) sendMessage(val);
+      }
+    });
+
+    // dat.GUI binds toggleHide() to window 'keydown' (bubble phase) and checks
+    // activeElement.type !== 'text' — textarea.type is "textarea", not "text",
+    // so dat.GUI still intercepts keys even when the textarea has focus.
+    // Fix: intercept at document bubble (runs before window bubble) and swallow
+    // all keydown events while the agent panel is visible.
+    document.addEventListener("keydown", (e) => {
+      const panel = document.getElementById("sa-panel");
+      if (panel && panel.style.display !== "none") {
+        e.stopPropagation();
       }
     });
     document.getElementById("sa-api-save").onclick = saveApiKey;
