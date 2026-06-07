@@ -281,6 +281,7 @@
             break;
         }
         if ([87, 83, 65, 68].includes(event.keyCode)) {
+          StarAgent.setActiveStar(null);
           var move = new THREE.Vector3(dx, dy, dz);
           camera.position.add(move);
           controls.target.add(move);
@@ -353,6 +354,7 @@
       var goToSun = {
         goToSun: function () {
           if (controls.position != sun.position) {
+            StarAgent.setActiveStar(sun.name);
             recenter(sun);
           }
         },
@@ -368,6 +370,7 @@
         }
         if (star != null) {
           foundStar = star.name;
+          StarAgent.setActiveStar(star.name);
           recenter(star);
         } else {
           showMessage("Nothing found", 3000);
@@ -404,6 +407,13 @@
       await readClusters();
       await setupScene();
       StarAgent.init({ scene: scene, camera: camera, controls: controls, stars: starPositions, names: starNames });
+      StarAgent.setNavigator(function(simbadId) {
+        var star = starPositions.find(function(s) { return s.name === simbadId; });
+        if (!star) return false;
+        foundStar = star.name;
+        recenter(star);
+        return true;
+      });
       naj();
       function naj() {
         setTimeout(function () {
@@ -722,11 +732,12 @@
             }
             return;
           }
+          StarAgent.setActiveStar(object.name);
           recenter(object);
           render();
         }
       }
-      
+
       window.onresize = function () {
         var width = window.innerWidth,
           height = window.innerHeight;
@@ -739,7 +750,6 @@
       };
       
       function recenter(object) {
-        StarAgent.notifyStarClick(object);
         animation = ANIMATION.RECENTER;
         if (activeStar != undefined) {
           showLabel(activeStar, false);
@@ -938,6 +948,7 @@
         sphere.apptype = APPTYPE.STAR;
         sphere.initialscale = sphere.scale.x;
         sphere.spectralClass = spectralType ? (spectralType.match(/[OBAFGKMLTYXWDC]/) || [""])[0] : "";
+        sphere.spectralType  = spectralType || "";
         sphere.text = ly.toFixed(0) + " ly. Type " + params[1] + " Class " + spectralType + 
           (typeof size == "number" && size.toFixed(0) > 1 ? ". " + size.toFixed(0) + " Sun radii" : "");
         if (sphere == sun) {

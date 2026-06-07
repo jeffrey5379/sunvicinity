@@ -1,98 +1,147 @@
-
 const StarAgent = (() => {
-
   // ─── State ───────────────────────────────────────────────────────────────────
   let _scene, _camera, _controls, _stars, _names;
   let _highlights = [];
+  let _navigator = null; // set via setNavigator() — wraps index.html's recenter()
+  let _activeStar = null; // SIMBAD id of the star currently in focus (set by click or navigate)
   const _conversationHistory = [];
   let _isThinking = false;
-  const SESSION_KEY = 'sa_api_key';
+  const SESSION_KEY = "sa_api_key";
 
   // ─── Tool definitions ────────────────────────────────────────────────────────
 
   const TOOLS = [
     {
-      name: 'navigate_to_star',
-      description: 'Smoothly flies the camera to a star by name (SIMBAD ID or common name). Use when the user wants to "visit", "fly to", or "show" a specific star.',
+      name: "navigate_to_star",
+      description:
+        'Smoothly flies the camera to a star by name (SIMBAD ID or common name). Use when the user wants to "visit", "fly to", or "show" a specific star.',
       input_schema: {
-        type: 'object',
+        type: "object",
         properties: {
-          star_name: { type: 'string', description: 'Star name: SIMBAD ID (e.g. "* alf CMa") or common name ("Sirius", "Vega", "Betelgeuse")' }
+          star_name: {
+            type: "string",
+            description:
+              'Star name: SIMBAD ID (e.g. "* alf CMa") or common name ("Sirius", "Vega", "Betelgeuse")',
+          },
         },
-        required: ['star_name']
-      }
+        required: ["star_name"],
+      },
     },
     {
-      name: 'get_nearby_stars',
-      description: 'Returns a list of stars within a given radius from the current camera position or from a specific star.',
+      name: "get_nearby_stars",
+      description:
+        "Returns a list of stars within a given radius from the current camera position or from a specific star.",
       input_schema: {
-        type: 'object',
+        type: "object",
         properties: {
-          radius_ly: { type: 'number', description: 'Search radius in light-years' },
-          from_star: { type: 'string', description: 'Optional: search near this star instead of the camera position' },
-          limit: { type: 'number', description: 'Maximum number of results (default 10)' }
+          radius_ly: {
+            type: "number",
+            description: "Search radius in light-years",
+          },
+          from_star: {
+            type: "string",
+            description:
+              "Optional: search near this star instead of the camera position",
+          },
+          limit: {
+            type: "number",
+            description: "Maximum number of results (default 10)",
+          },
         },
-        required: ['radius_ly']
-      }
+        required: ["radius_ly"],
+      },
     },
     {
-      name: 'search_stars_by_type',
-      description: 'Finds stars by spectral class (O, B, A, F, G, K, M) or type (red giant, white dwarf, etc). Returns a list with distances.',
+      name: "search_stars_by_type",
+      description:
+        "Finds stars by spectral class (O, B, A, F, G, K, M) or type (red giant, white dwarf, etc). Returns a list with distances.",
       input_schema: {
-        type: 'object',
+        type: "object",
         properties: {
-          spectral_prefix: { type: 'string', description: 'Start of spectral class: "M", "K", "G", "A", "B", "O", "F", "WD" (white dwarf), "C" (carbon star)' },
-          max_distance_ly: { type: 'number', description: 'Optional: only within this radius from the Sun' },
-          limit: { type: 'number', description: 'Maximum number of results (default 10)' }
+          spectral_prefix: {
+            type: "string",
+            description:
+              'Start of spectral class: "M", "K", "G", "A", "B", "O", "F", "WD" (white dwarf), "C" (carbon star)',
+          },
+          max_distance_ly: {
+            type: "number",
+            description: "Optional: only within this radius from the Sun",
+          },
+          limit: {
+            type: "number",
+            description: "Maximum number of results (default 10)",
+          },
         },
-        required: ['spectral_prefix']
-      }
+        required: ["spectral_prefix"],
+      },
     },
     {
-      name: 'highlight_stars',
-      description: 'Highlights a group of stars on the 3D scene with a glowing wireframe halo. Use to visually demonstrate search results.',
+      name: "highlight_stars",
+      description:
+        "Highlights a group of stars on the 3D scene with a glowing wireframe halo. Use to visually demonstrate search results.",
       input_schema: {
-        type: 'object',
+        type: "object",
         properties: {
-          star_names: { type: 'array', items: { type: 'string' }, description: 'Array of SIMBAD IDs of stars to highlight' },
-          color: { type: 'string', description: 'Color: "cyan", "orange", "green", "red", "yellow", "purple"' }
+          star_names: {
+            type: "array",
+            items: { type: "string" },
+            description: "Array of SIMBAD IDs of stars to highlight",
+          },
+          color: {
+            type: "string",
+            description:
+              'Color: "cyan", "orange", "green", "red", "yellow", "purple"',
+          },
         },
-        required: ['star_names', 'color']
-      }
+        required: ["star_names", "color"],
+      },
     },
     {
-      name: 'clear_highlights',
-      description: 'Removes all highlight halos from the scene.',
-      input_schema: { type: 'object', properties: {} }
+      name: "clear_highlights",
+      description: "Removes all highlight halos from the scene.",
+      input_schema: { type: "object", properties: {} },
     },
     {
-      name: 'get_current_position',
-      description: 'Returns the current camera position and the nearest stars to it. Useful for orientation.',
-      input_schema: { type: 'object', properties: {} }
+      name: "get_current_position",
+      description:
+        "Returns the current camera position and the nearest stars to it. Useful for orientation.",
+      input_schema: { type: "object", properties: {} },
     },
     {
-      name: 'get_star_details',
-      description: 'Gets technical data for a specific star from the dataset: coordinates, distance, spectral class, radius.',
+      name: "get_star_details",
+      description:
+        "Gets technical data for a specific star from the dataset: coordinates, distance, spectral class, radius.",
       input_schema: {
-        type: 'object',
+        type: "object",
         properties: {
-          star_name: { type: 'string', description: 'SIMBAD ID or common name of the star' }
+          star_name: {
+            type: "string",
+            description: "SIMBAD ID or common name of the star",
+          },
         },
-        required: ['star_name']
-      }
+        required: ["star_name"],
+      },
     },
     {
-      name: 'plan_tour',
-      description: 'Plans and launches an automatic tour — sequential camera flights to multiple stars with pauses.',
+      name: "plan_tour",
+      description:
+        "Plans and launches an automatic tour — sequential camera flights to multiple stars with pauses.",
       input_schema: {
-        type: 'object',
+        type: "object",
         properties: {
-          stops: { type: 'array', items: { type: 'string' }, description: 'Ordered list of SIMBAD IDs to visit' },
-          pause_seconds: { type: 'number', description: 'Pause at each star in seconds (default 4)' }
+          stops: {
+            type: "array",
+            items: { type: "string" },
+            description: "Ordered list of SIMBAD IDs to visit",
+          },
+          pause_seconds: {
+            type: "number",
+            description: "Pause at each star in seconds (default 4)",
+          },
         },
-        required: ['stops']
-      }
-    }
+        required: ["stops"],
+      },
+    },
   ];
 
   // ─── Tool helper functions ───────────────────────────────────────────────────
@@ -101,16 +150,17 @@ const StarAgent = (() => {
     if (!name) return null;
     const n = name.toLowerCase().trim();
     // Exact match by SIMBAD ID
-    let found = _stars.find(s => s.name.toLowerCase() === n);
+    let found = _stars.find((s) => s.name.toLowerCase() === n);
     if (found) return found;
     // Match by common name via the ghb names table
-    const alias = _names.find(e => e.name.toLowerCase() === n);
-    if (alias) found = _stars.find(s => s.name === alias.code);
+    const alias = _names.find((e) => e.name.toLowerCase() === n);
+    if (alias) found = _stars.find((s) => s.name === alias.code);
     if (found) return found;
     // Partial match
-    found = _stars.find(s =>
-      s.name.toLowerCase().includes(n) ||
-      (s.secondName && s.secondName.toLowerCase().includes(n))
+    found = _stars.find(
+      (s) =>
+        s.name.toLowerCase().includes(n) ||
+        (s.secondName && s.secondName.toLowerCase().includes(n)),
     );
     return found || null;
   }
@@ -121,58 +171,41 @@ const StarAgent = (() => {
   }
 
   function getSpectralFromData(star) {
-    if (!star.data) return '';
-    const parts = star.data.split('|');
-    return parts[4] || '';
+    if (!star.data) return "";
+    const parts = star.data.split("|");
+    return parts[4] || "";
   }
 
   function getRadiusFromData(star) {
-    if (!star.data) return '';
-    const parts = star.data.split('|');
-    return parts[5] || '';
-  }
-
-  // Smooth camera flight to a target position
-  function animateCameraTo(targetPos, duration = 2000) {
-    return new Promise(resolve => {
-      const startPos = _camera.position.clone();
-      const startTarget = _controls.target.clone();
-      // Stop 3 units away from the star
-      const dir = targetPos.clone().sub(startPos).normalize();
-      const endPos = targetPos.clone().sub(dir.multiplyScalar(3));
-      const endTarget = targetPos.clone();
-      const startTime = performance.now();
-
-      function tick(now) {
-        const t = Math.min((now - startTime) / duration, 1);
-        const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; // easeInOut
-        _camera.position.lerpVectors(startPos, endPos, ease);
-        _controls.target.lerpVectors(startTarget, endTarget, ease);
-        _camera.lookAt(_controls.target);
-        if (t < 1) { requestAnimationFrame(tick); } else { resolve(); }
-      }
-      requestAnimationFrame(tick);
-    });
+    if (!star.data) return "";
+    const parts = star.data.split("|");
+    return parts[5] || "";
   }
 
   // ─── Tool handlers ───────────────────────────────────────────────────────────
 
   const toolHandlers = {
-
     navigate_to_star: async ({ star_name }) => {
       const star = findStar(star_name);
-      if (!star) return { error: `Star "${star_name}" not found in the dataset` };
-      if (!star.position) return { error: `No coordinates available for "${star_name}"` };
+      if (!star)
+        return { error: `Star "${star_name}" not found in the dataset` };
+      if (!star.position)
+        return { error: `No coordinates available for "${star_name}"` };
+      if (!_navigator) return { error: "Scene navigator not available" };
 
-      appendMessage('agent', `🚀 Flying to **${star.secondName || star.name}**...`);
-      await animateCameraTo(star.position, 2500);
+      appendMessage(
+        "agent",
+        `🚀 Flying to **${star.secondName || star.name}**...`,
+      );
+      _navigator(star.name);
+      _activeStar = star.name;
 
       return {
         success: true,
         star: star.name,
         common_name: star.secondName || null,
         distance_from_sun_ly: Math.round(starDistanceFromSun(star) * 10) / 10,
-        spectral: getSpectralFromData(star)
+        spectral: getSpectralFromData(star),
       };
     },
 
@@ -187,40 +220,49 @@ const StarAgent = (() => {
       }
 
       const nearby = _stars
-        .filter(s => s.position && s.position.distanceTo(origin) <= radius_ly)
-        .sort((a, b) => a.position.distanceTo(origin) - b.position.distanceTo(origin))
+        .filter((s) => s.position && s.position.distanceTo(origin) <= radius_ly)
+        .sort(
+          (a, b) =>
+            a.position.distanceTo(origin) - b.position.distanceTo(origin),
+        )
         .slice(0, limit)
-        .map(s => ({
+        .map((s) => ({
           name: s.name,
           common_name: s.secondName || null,
           distance_ly: Math.round(s.position.distanceTo(origin) * 10) / 10,
-          spectral: getSpectralFromData(s)
+          spectral: getSpectralFromData(s),
         }));
 
       return { count: nearby.length, radius_ly, stars: nearby };
     },
 
-    search_stars_by_type: async ({ spectral_prefix, max_distance_ly, limit = 10 }) => {
+    search_stars_by_type: async ({
+      spectral_prefix,
+      max_distance_ly,
+      limit = 10,
+    }) => {
       const prefix = spectral_prefix.toUpperCase();
-      let results = _stars.filter(s => {
+      let results = _stars.filter((s) => {
         const sp = getSpectralFromData(s).toUpperCase();
         return sp.startsWith(prefix);
       });
 
       if (max_distance_ly) {
-        const sun = _stars.find(s => s.name === 'Sun');
+        const sun = _stars.find((s) => s.name === "Sun");
         const sunPos = sun ? sun.position : { distanceTo: () => 0 };
-        results = results.filter(s => s.position && s.position.distanceTo(sunPos) <= max_distance_ly);
+        results = results.filter(
+          (s) => s.position && s.position.distanceTo(sunPos) <= max_distance_ly,
+        );
       }
 
       results = results
         .sort((a, b) => starDistanceFromSun(a) - starDistanceFromSun(b))
         .slice(0, limit)
-        .map(s => ({
+        .map((s) => ({
           name: s.name,
           common_name: s.secondName || null,
           distance_from_sun_ly: Math.round(starDistanceFromSun(s) * 10) / 10,
-          spectral: getSpectralFromData(s)
+          spectral: getSpectralFromData(s),
         }));
 
       return { spectral_prefix, count: results.length, stars: results };
@@ -228,12 +270,16 @@ const StarAgent = (() => {
 
     highlight_stars: async ({ star_names, color }) => {
       // Remove previous highlights
-      _highlights.forEach(h => _scene.remove(h));
+      _highlights.forEach((h) => _scene.remove(h));
       _highlights = [];
 
       const colorMap = {
-        cyan: 0x00ffff, orange: 0xff8800, green: 0x00ff88,
-        red: 0xff3333, yellow: 0xffff00, purple: 0xcc44ff
+        cyan: 0x00ffff,
+        orange: 0xff8800,
+        green: 0x00ff88,
+        red: 0xff3333,
+        yellow: 0xffff00,
+        purple: 0xcc44ff,
       };
       const hex = colorMap[color] || 0x00ffff;
 
@@ -244,7 +290,12 @@ const StarAgent = (() => {
 
         // Create a pulsing wireframe halo sphere
         const geo = new THREE.SphereGeometry(0.8, 8, 8);
-        const mat = new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: 0.25, wireframe: true });
+        const mat = new THREE.MeshBasicMaterial({
+          color: hex,
+          transparent: true,
+          opacity: 0.25,
+          wireframe: true,
+        });
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.copy(star.position);
         mesh.isHighlight = true;
@@ -259,7 +310,9 @@ const StarAgent = (() => {
         const pulse = () => {
           if (_highlights.length === 0) return;
           t += 0.05;
-          _highlights.forEach(h => { h.material.opacity = 0.15 + 0.15 * Math.sin(t); });
+          _highlights.forEach((h) => {
+            h.material.opacity = 0.15 + 0.15 * Math.sin(t);
+          });
           requestAnimationFrame(pulse);
         };
         pulse();
@@ -269,7 +322,7 @@ const StarAgent = (() => {
     },
 
     clear_highlights: async () => {
-      _highlights.forEach(h => _scene.remove(h));
+      _highlights.forEach((h) => _scene.remove(h));
       _highlights = [];
       return { success: true };
     },
@@ -277,13 +330,13 @@ const StarAgent = (() => {
     get_current_position: async () => {
       const pos = _controls.target;
       const nearby = _stars
-        .filter(s => s.position && s.position.distanceTo(pos) < 50)
+        .filter((s) => s.position && s.position.distanceTo(pos) < 50)
         .sort((a, b) => a.position.distanceTo(pos) - b.position.distanceTo(pos))
         .slice(0, 5)
-        .map(s => ({
+        .map((s) => ({
           name: s.name,
           common_name: s.secondName || null,
-          distance_ly: Math.round(s.position.distanceTo(pos) * 10) / 10
+          distance_ly: Math.round(s.position.distanceTo(pos) * 10) / 10,
         }));
 
       return {
@@ -291,7 +344,7 @@ const StarAgent = (() => {
         camera_y: Math.round(pos.y),
         camera_z: Math.round(pos.z),
         distance_from_sun_ly: Math.round(pos.length()),
-        nearest_stars: nearby
+        nearest_stars: nearby,
       };
     },
 
@@ -303,36 +356,48 @@ const StarAgent = (() => {
         simbad_id: star.name,
         common_name: star.secondName || null,
         distance_from_sun_ly: Math.round(starDistanceFromSun(star) * 10) / 10,
-        spectral_type: getSpectralFromData(star) || 'no data',
-        radius_data: getRadiusFromData(star) || 'no data',
-        position: star.position ? {
-          x: Math.round(star.position.x),
-          y: Math.round(star.position.y),
-          z: Math.round(star.position.z)
-        } : null
+        spectral_type: getSpectralFromData(star) || "no data",
+        radius_data: getRadiusFromData(star) || "no data",
+        position: star.position
+          ? {
+              x: Math.round(star.position.x),
+              y: Math.round(star.position.y),
+              z: Math.round(star.position.z),
+            }
+          : null,
       };
     },
 
     plan_tour: async ({ stops, pause_seconds = 4 }) => {
-      const found = stops.map(name => findStar(name)).filter(Boolean);
-      if (found.length === 0) return { error: 'None of the listed stars were found in the dataset' };
+      const found = stops.map((name) => findStar(name)).filter(Boolean);
+      if (found.length === 0)
+        return { error: "None of the listed stars were found in the dataset" };
+      if (!_navigator) return { error: "Scene navigator not available" };
 
-      appendMessage('agent', `🗺 Starting tour of ${found.length} stars...`);
+      appendMessage("agent", `🗺 Starting tour of ${found.length} stars...`);
+      // 3000ms matches recenter's animation (200 steps × ~15ms render interval)
+      const FLIGHT_MS = 3000;
 
       for (const star of found) {
         if (!star.position) continue;
-        appendMessage('agent', `➡ **${star.secondName || star.name}** (${Math.round(starDistanceFromSun(star))} ly)`);
-        await animateCameraTo(star.position, 2000);
-        await new Promise(r => setTimeout(r, pause_seconds * 1000));
+        appendMessage(
+          "agent",
+          `➡ **${star.secondName || star.name}** (${Math.round(starDistanceFromSun(star))} ly)`,
+        );
+        _navigator(star.name);
+        _activeStar = star.name;
+        await new Promise((r) =>
+          setTimeout(r, FLIGHT_MS + pause_seconds * 1000),
+        );
       }
 
-      return { success: true, visited: found.map(s => s.name) };
-    }
+      return { success: true, visited: found.map((s) => s.name) };
+    },
   };
 
   // ─── Agent loop ──────────────────────────────────────────────────────────────
 
-  const SYSTEM_PROMPT = `You are an astronomical agent embedded in an interactive 3D map of the solar stellar neighborhood (radius ~2000 light-years, SIMBAD database).
+  const _SYSTEM_BASE = `You are an astronomical agent embedded in an interactive 3D map of the solar stellar neighborhood (radius ~2000 light-years, SIMBAD database).
 
 You have tools to control the map:
 - navigate_to_star: fly the camera to a star
@@ -346,11 +411,61 @@ You have tools to control the map:
 
 Communication style: friendly, enthusiastic, concise. Respond in the user's language. Use tools actively — don't just describe, show. After navigating, share a brief interesting fact about the star. When returning search results, always highlight them on the scene. Stars in the dataset are stored under SIMBAD IDs (e.g. "* alf CMa" = Sirius, "* alf Ori" = Betelgeuse) — account for this when calling tools.`;
 
+  // Builds a fresh system prompt injected on every API call.
+  // Uses camera.position (not controls.target) so WASD movement and
+  // orbital rotation are reflected accurately.
+  // _activeStar is preferred when the camera is still near it (< 15 ly);
+  // otherwise falls back to distance-based nearest-star search.
+  function buildSystemPrompt() {
+    if (!_controls) return _SYSTEM_BASE;
+    const pos = _controls.target;
+    const distFromSun = Math.round(pos.length());
+
+    let locationLine;
+    if (_activeStar) {
+      const focused = _stars.find((s) => s.name === _activeStar);
+      const d =
+        focused && focused.position
+          ? Math.round(focused.position.distanceTo(pos) * 10) / 10
+          : null;
+      if (d !== null && d < 15) {
+        const label = focused.secondName || focused.name;
+        locationLine =
+          d < 1
+            ? `Focused on: ${label}.`
+            : `Focused on: ${label} (${d} ly from camera).`;
+      } else {
+        _activeStar = null; // camera moved far from active star — reset
+      }
+    }
+
+    if (!locationLine) {
+      const nearby = _stars
+        .filter((s) => s.position && s.position.distanceTo(pos) < 15)
+        .sort((a, b) => a.position.distanceTo(pos) - b.position.distanceTo(pos))
+        .slice(0, 3)
+        .map((s) => {
+          const d = Math.round(s.position.distanceTo(pos) * 10) / 10;
+          return (
+            (s.secondName || s.name) + (d > 0 ? ` (${d} ly)` : " (current)")
+          );
+        });
+      locationLine = nearby.length
+        ? `Nearest: ${nearby.join(", ")}.`
+        : `Position: (${Math.round(pos.x)}, ${Math.round(pos.y)}, ${Math.round(pos.z)}).`;
+    }
+
+    return `${_SYSTEM_BASE}\n\n[Current camera position: ${distFromSun} ly from Sun. ${locationLine} Always use this as the reference point for distance-based queries unless the user specifies otherwise.]`;
+  }
+
   async function runAgentLoop(userMessage) {
     const apiKey = getApiKey();
-    if (!apiKey) { showApiSetup(); return; }
+    if (!apiKey) {
+      showApiSetup();
+      return;
+    }
 
-    _conversationHistory.push({ role: 'user', content: userMessage });
+    _conversationHistory.push({ role: "user", content: userMessage });
     setThinking(true);
 
     try {
@@ -360,27 +475,27 @@ Communication style: friendly, enthusiastic, concise. Respond in the user's lang
       while (iterations < MAX_ITERATIONS) {
         iterations++;
 
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
+        const response = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true',
+            "Content-Type": "application/json",
+            "x-api-key": apiKey,
+            "anthropic-version": "2023-06-01",
+            "anthropic-dangerous-direct-browser-access": "true",
           },
           body: JSON.stringify({
-            model: 'claude-sonnet-4-6',
+            model: "claude-sonnet-4-6",
             max_tokens: 1024,
-            system: SYSTEM_PROMPT,
+            system: buildSystemPrompt(),
             tools: TOOLS,
             messages: _conversationHistory,
-          })
+          }),
         });
 
         if (!response.ok) {
           const err = await response.json().catch(() => ({}));
           if (response.status === 401) {
-            appendMessage('error', '❌ Invalid API key.');
+            appendMessage("error", "❌ Invalid API key.");
             sessionStorage.removeItem(SESSION_KEY);
             setTimeout(showApiSetup, 1000);
             break;
@@ -391,21 +506,23 @@ Communication style: friendly, enthusiastic, concise. Respond in the user's lang
         const data = await response.json();
 
         // Add assistant response to history
-        _conversationHistory.push({ role: 'assistant', content: data.content });
+        _conversationHistory.push({ role: "assistant", content: data.content });
 
         // Show text blocks to the user
         for (const block of data.content) {
-          if (block.type === 'text' && block.text.trim()) {
-            appendMessage('agent', block.text.trim());
+          if (block.type === "text" && block.text.trim()) {
+            appendMessage("agent", block.text.trim());
           }
         }
 
         // Stop if turn is complete
-        if (data.stop_reason === 'end_turn') break;
+        if (data.stop_reason === "end_turn") break;
 
         // Execute tool calls
-        if (data.stop_reason === 'tool_use') {
-          const toolUseBlocks = data.content.filter(b => b.type === 'tool_use');
+        if (data.stop_reason === "tool_use") {
+          const toolUseBlocks = data.content.filter(
+            (b) => b.type === "tool_use",
+          );
           const toolResults = [];
 
           for (const toolUse of toolUseBlocks) {
@@ -421,22 +538,21 @@ Communication style: friendly, enthusiastic, concise. Respond in the user's lang
             }
 
             toolResults.push({
-              type: 'tool_result',
+              type: "tool_result",
               tool_use_id: toolUse.id,
-              content: JSON.stringify(result)
+              content: JSON.stringify(result),
             });
           }
 
           // Return tool results to the agent
-          _conversationHistory.push({ role: 'user', content: toolResults });
+          _conversationHistory.push({ role: "user", content: toolResults });
           continue;
         }
 
         break; // any other stop_reason
       }
-
     } catch (e) {
-      appendMessage('error', `⚠ Error: ${e.message}`);
+      appendMessage("error", `⚠ Error: ${e.message}`);
     } finally {
       setThinking(false);
     }
@@ -451,13 +567,13 @@ Communication style: friendly, enthusiastic, concise. Respond in the user's lang
     _stars = stars;
     _names = names || [];
     createUI();
-    console.log('[StarAgent] Initialized. Stars in dataset:', _stars.length);
+    console.log("[StarAgent] Initialized. Stars in dataset:", _stars.length);
   }
 
-  function notifyStarClick(starMesh) {
-    if (!starMesh || !starMesh.name) return;
-    const apptype = starMesh.apptype;
-    if (apptype === 'ner' || apptype === 'njy' || apptype === 'non' || apptype === 'nrv') return;
+  // Called from index.html after scene is ready.
+  // fn(simbadId) must look up the star in starPositions and call recenter().
+  function setNavigator(fn) {
+    _navigator = fn;
   }
 
   // ─── UI ──────────────────────────────────────────────────────────────────────
@@ -645,28 +761,28 @@ Communication style: friendly, enthusiastic, concise. Respond in the user's lang
   `;
 
   const SUGGESTIONS = [
-    'Fly to Betelgeuse',
-    'Nearest stars to us',
-    'Find red giants',
-    'G-type stars like the Sun',
-    'Tour of the brightest stars',
+    "Fly to Betelgeuse",
+    "Nearest stars to us",
+    "Find red giants",
+    "G-type stars like the Sun",
+    "Tour of the brightest stars",
   ];
 
   function createUI() {
-    const style = document.createElement('style');
+    const style = document.createElement("style");
     style.textContent = STYLES;
     document.head.appendChild(style);
 
     // Toggle button
-    const toggle = document.createElement('button');
-    toggle.id = 'sa-toggle';
-    toggle.innerHTML = '🤖';
-    toggle.title = 'Astronomical Agent';
+    const toggle = document.createElement("button");
+    toggle.id = "sa-toggle";
+    toggle.innerHTML = "🤖";
+    toggle.title = "Astronomical Agent";
     document.body.appendChild(toggle);
 
     // Panel
-    const panel = document.createElement('div');
-    panel.id = 'sa-panel';
+    const panel = document.createElement("div");
+    panel.id = "sa-panel";
     panel.innerHTML = `
       <div id="sa-header">
         <div class="sa-status-dot" id="sa-dot"></div>
@@ -693,10 +809,10 @@ Communication style: friendly, enthusiastic, concise. Respond in the user's lang
     document.body.appendChild(panel);
 
     // Suggestion chips
-    const sugg = document.getElementById('sa-suggestions');
-    SUGGESTIONS.forEach(text => {
-      const chip = document.createElement('button');
-      chip.className = 'sa-chip';
+    const sugg = document.getElementById("sa-suggestions");
+    SUGGESTIONS.forEach((text) => {
+      const chip = document.createElement("button");
+      chip.className = "sa-chip";
       chip.textContent = text;
       chip.onclick = () => sendMessage(text);
       sugg.appendChild(chip);
@@ -704,23 +820,27 @@ Communication style: friendly, enthusiastic, concise. Respond in the user's lang
 
     // Events
     toggle.onclick = () => togglePanel();
-    document.getElementById('sa-send').onclick = () => {
-      const val = document.getElementById('sa-input').value.trim();
+    document.getElementById("sa-send").onclick = () => {
+      const val = document.getElementById("sa-input").value.trim();
       if (val) sendMessage(val);
     };
-    document.getElementById('sa-input').addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+    document.getElementById("sa-input").addEventListener("keydown", (e) => {
+      e.stopPropagation(); // prevent dat.GUI from intercepting keys (e.g. H = hide toggle)
+      if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         const val = e.target.value.trim();
         if (val) sendMessage(val);
       }
     });
-    document.getElementById('sa-api-save').onclick = saveApiKey;
+    document.getElementById("sa-api-save").onclick = saveApiKey;
 
     // Welcome message
     setTimeout(() => {
       if (getApiKey()) {
-        appendMessage('agent', '👋 Hello! I\'m your astronomical agent. I can fly to stars, search by type, highlight groups, and build tours. What shall we explore?');
+        appendMessage(
+          "agent",
+          "👋 Hello! I'm your astronomical agent. I can fly to stars, search by type, highlight groups, and build tours. What shall we explore?",
+        );
         showSuggestions(true);
       } else {
         showApiSetup();
@@ -729,81 +849,87 @@ Communication style: friendly, enthusiastic, concise. Respond in the user's lang
   }
 
   function togglePanel() {
-    const panel = document.getElementById('sa-panel');
-    const toggle = document.getElementById('sa-toggle');
-    const isOpen = panel.classList.contains('sa-open');
+    const panel = document.getElementById("sa-panel");
+    const toggle = document.getElementById("sa-toggle");
+    const isOpen = panel.classList.contains("sa-open");
     if (isOpen) {
-      panel.classList.remove('sa-open');
-      toggle.classList.remove('sa-active');
-      setTimeout(() => { panel.style.display = 'none'; }, 300);
+      panel.classList.remove("sa-open");
+      toggle.classList.remove("sa-active");
+      setTimeout(() => {
+        panel.style.display = "none";
+      }, 300);
     } else {
-      panel.style.display = 'flex';
+      panel.style.display = "flex";
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => panel.classList.add('sa-open'));
+        requestAnimationFrame(() => panel.classList.add("sa-open"));
       });
-      toggle.classList.add('sa-active');
+      toggle.classList.add("sa-active");
       scrollMessages();
     }
   }
 
   function showApiSetup() {
-    document.getElementById('sa-api-setup').style.display = 'flex';
-    document.getElementById('sa-messages').style.display = 'none';
-    document.getElementById('sa-suggestions').style.display = 'none';
-    document.getElementById('sa-input-row').style.display = 'none';
-    const panel = document.getElementById('sa-panel');
-    if (!panel.classList.contains('sa-open')) togglePanel();
+    document.getElementById("sa-api-setup").style.display = "flex";
+    document.getElementById("sa-messages").style.display = "none";
+    document.getElementById("sa-suggestions").style.display = "none";
+    document.getElementById("sa-input-row").style.display = "none";
+    const panel = document.getElementById("sa-panel");
+    if (!panel.classList.contains("sa-open")) togglePanel();
   }
 
   function saveApiKey() {
-    const val = document.getElementById('sa-api-input').value.trim();
-    if (!val.startsWith('sk-')) {
-      document.getElementById('sa-api-input').style.borderColor = '#c05050';
+    const val = document.getElementById("sa-api-input").value.trim();
+    if (!val.startsWith("sk-")) {
+      document.getElementById("sa-api-input").style.borderColor = "#c05050";
       return;
     }
     sessionStorage.setItem(SESSION_KEY, val);
-    document.getElementById('sa-api-setup').style.display = 'none';
-    document.getElementById('sa-messages').style.display = 'flex';
-    document.getElementById('sa-suggestions').style.display = 'flex';
-    document.getElementById('sa-input-row').style.display = 'flex';
-    appendMessage('agent', '✅ Ready! What shall we explore on the map?');
+    document.getElementById("sa-api-setup").style.display = "none";
+    document.getElementById("sa-messages").style.display = "flex";
+    document.getElementById("sa-suggestions").style.display = "flex";
+    document.getElementById("sa-input-row").style.display = "flex";
+    appendMessage("agent", "✅ Ready! What shall we explore on the map?");
     showSuggestions(true);
   }
 
-  function getApiKey() { return sessionStorage.getItem(SESSION_KEY) || ''; }
+  function getApiKey() {
+    return sessionStorage.getItem(SESSION_KEY) || "";
+  }
 
   function showSuggestions(visible) {
-    const el = document.getElementById('sa-suggestions');
-    if (el) el.style.display = visible ? 'flex' : 'none';
+    const el = document.getElementById("sa-suggestions");
+    if (el) el.style.display = visible ? "flex" : "none";
   }
 
   function sendMessage(text) {
     if (_isThinking) return;
-    document.getElementById('sa-input').value = '';
+    document.getElementById("sa-input").value = "";
     showSuggestions(false);
-    appendMessage('user', text);
+    appendMessage("user", text);
     runAgentLoop(text);
   }
 
   function appendMessage(type, text) {
-    const msgs = document.getElementById('sa-messages');
+    const msgs = document.getElementById("sa-messages");
     if (!msgs) return;
-    const thinking = msgs.querySelector('.sa-thinking');
-    if (thinking && type !== 'thinking') thinking.remove();
-    const div = document.createElement('div');
+    const thinking = msgs.querySelector(".sa-thinking");
+    if (thinking && type !== "thinking") thinking.remove();
+    const div = document.createElement("div");
     div.className = `sa-msg sa-msg-${type}`;
     // Simple markdown: **bold**
-    div.innerHTML = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    div.innerHTML = text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
     msgs.appendChild(div);
     scrollMessages();
   }
 
   function showToolCall(toolName, input) {
-    const msgs = document.getElementById('sa-messages');
+    const msgs = document.getElementById("sa-messages");
     if (!msgs) return;
-    const div = document.createElement('div');
-    div.className = 'sa-msg sa-msg-tool';
-    const params = Object.entries(input).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(', ');
+    const div = document.createElement("div");
+    div.className = "sa-msg sa-msg-tool";
+    const params = Object.entries(input)
+      .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
+      .join(", ");
     div.innerHTML = `<span class="sa-tool-name">⚙ ${toolName}</span> <span style="color:#1a5060">${params}</span>`;
     msgs.appendChild(div);
     scrollMessages();
@@ -811,34 +937,40 @@ Communication style: friendly, enthusiastic, concise. Respond in the user's lang
 
   function setThinking(active) {
     _isThinking = active;
-    const dot = document.getElementById('sa-dot');
-    const send = document.getElementById('sa-send');
-    const msgs = document.getElementById('sa-messages');
+    const dot = document.getElementById("sa-dot");
+    const send = document.getElementById("sa-send");
+    const msgs = document.getElementById("sa-messages");
     if (!msgs) return;
     if (active) {
-      if (dot) dot.classList.add('sa-busy');
+      if (dot) dot.classList.add("sa-busy");
       if (send) send.disabled = true;
-      const thinking = document.createElement('div');
-      thinking.className = 'sa-thinking';
+      const thinking = document.createElement("div");
+      thinking.className = "sa-thinking";
       thinking.innerHTML = `<div class="sa-dot"></div><div class="sa-dot"></div><div class="sa-dot"></div><span>Thinking...</span>`;
       msgs.appendChild(thinking);
       scrollMessages();
     } else {
-      if (dot) dot.classList.remove('sa-busy');
+      if (dot) dot.classList.remove("sa-busy");
       if (send) send.disabled = false;
-      const thinking = msgs.querySelector('.sa-thinking');
+      const thinking = msgs.querySelector(".sa-thinking");
       if (thinking) thinking.remove();
       showSuggestions(true);
     }
   }
 
   function scrollMessages() {
-    const msgs = document.getElementById('sa-messages');
-    if (msgs) setTimeout(() => { msgs.scrollTop = msgs.scrollHeight; }, 50);
+    const msgs = document.getElementById("sa-messages");
+    if (msgs)
+      setTimeout(() => {
+        msgs.scrollTop = msgs.scrollHeight;
+      }, 50);
   }
 
-  return { init, notifyStarClick };
+  function setActiveStar(name) {
+    _activeStar = name || null;
+  }
 
+  return { init, setNavigator, setActiveStar };
 })();
 
 window.StarAgent = StarAgent;

@@ -12,6 +12,7 @@ const StarVisualsConfig = {
   haloSize: 1.0, // multiplier for halo spread (0.1 = tight, 2.0 = very wide)
   haloAmount: 0.4, // halo brightness (0 = no halo, 1 = very bright)
   haloFadeBelow: 2.0, // ly — halo fades out smoothly at camera distance <= this value
+  haloFadeAbove: 100.0, // ly — halo fades out smoothly at camera distance >= this value
 
   // ── Core ────────────────────────────────────────────────────────────────────
   coreWidth: 0.2, // multiplier for Moffat PSF core radius (0.5 = sharp, 3.0 = bloated)
@@ -53,8 +54,8 @@ const StarVisualsConfig = {
     A: 1.4, // A-type: white stars (Vega, Sirius)
     F: 1.2, // F-type: yellow-white (Procyon, Canopus)
     G: 1.0, // G-type: solar analog — reference value
-    K: 0.7, // K-type: orange stars (Arcturus, Aldebaran)
-    M: 0.4, // M-type: red dwarfs, intrinsically dim
+    K: 0.8, // K-type: orange stars (Arcturus, Aldebaran)
+    M: 0.5, // M-type: red dwarfs, intrinsically dim
     C: 0.2, // C-type: carbon stars
     W: 1.9, // Wolf-Rayet: extremely hot and luminous
     D: 0.6, // White dwarfs: small but hot
@@ -136,6 +137,7 @@ const StarVisuals = (() => {
     #define HALO_SIZE        ${cfg.haloSize.toFixed(4)}
     #define HALO_AMOUNT      ${cfg.haloAmount.toFixed(4)}
     #define HALO_FADE_BELOW  ${cfg.haloFadeBelow.toFixed(4)}
+    #define HALO_FADE_ABOVE  ${cfg.haloFadeAbove.toFixed(4)}
     #define CORE_WIDTH       ${cfg.coreWidth.toFixed(4)}
     #define SPIKE_LENGTH     ${cfg.spikeLength.toFixed(4)}
     #define SPIKE_WIDTH      ${cfg.spikeWidth.toFixed(4)}
@@ -166,10 +168,11 @@ const StarVisuals = (() => {
       // at 10 ly: sigma≈0.10, amplitude=HALO_AMOUNT (tight halo)
       // at  1 ly: sigma≈0.32, amplitude≈1.8×HALO_AMOUNT (wide bloom)
       // at 0.3 ly: sigma clamped to 0.44 (fills sprite edge-to-edge)
-      float hCloseness = clamp(10.0 / max(vDistFromCam, 0.3), 1.0, 30.0);
-      float haloSigma  = clamp(HALO_SIZE * 0.10 * sqrt(hCloseness), 0.06, 0.44);
-      float haloAmp    = HALO_AMOUNT * clamp(pow(hCloseness, 0.25), 1.0, 2.5);
-      float halo       = haloAmp * exp(-r * r / (haloSigma * haloSigma));
+      float hCloseness  = clamp(10.0 / max(vDistFromCam, 0.3), 1.0, 30.0);
+      float haloSigma   = clamp(HALO_SIZE * 0.10 * sqrt(hCloseness), 0.06, 0.44);
+      float haloFarFade = 1.0 - smoothstep(HALO_FADE_ABOVE * 0.5, HALO_FADE_ABOVE, vDistFromCam);
+      float haloAmp     = HALO_AMOUNT * clamp(pow(hCloseness, 0.25), 1.0, 2.5) * haloFarFade;
+      float halo        = haloAmp * exp(-r * r / (haloSigma * haloSigma));
 
       // ── Diffraction spikes ─────────────────────────────────────────────────
       float spikeFade = smoothstep(0.0, SPIKE_FADE_BELOW, vDistFromCam);
@@ -210,7 +213,7 @@ const StarVisuals = (() => {
       if (b > 0.45) {
         float ar = 0.10 + b * 0.06;
         float aw = 0.012;
-        airy = exp(-pow(abs(r - ar), 2.0) / (aw * aw)) * (b - 0.45) * 0.5;
+        airy = exp(-pow(abs(r - ar), 2.0) / (aw * aw)) * (b - 0.45) * 0.5 * haloFarFade;
       }
 
       // ── Moffat PSF core ────────────────────────────────────────────────────
@@ -247,6 +250,20 @@ const StarVisuals = (() => {
   `;
   }
 
+  // Returns a brightness multiplier based on the luminosity class encoded in the
+  // full spectral type string (e.g. "M1-M2Ia-Iab", "K5III", "A1V").
+  // Ia supergiants are ~5× brighter visually than main-sequence stars of the
+  // same spectral letter; giants (III) are ~1.8×.
+  function _lumClassMult(spectralType) {
+    if (!spectralType) return 1.0;
+    if (/Ia/.test(spectralType)) return 5.0; // supergiants (Ia, Iab)
+    if (/Ib/.test(spectralType)) return 3.5; // bright supergiants
+    if (/II[^I]|II$/.test(spectralType)) return 2.5; // bright giants (II not III)
+    if (/III/.test(spectralType)) return 1.8; // giants
+    if (/IV/.test(spectralType)) return 1.2; // subgiants
+    return 1.0; // V / VI / unknown
+  }
+
   // ── Build ONE Points object from all star meshes ──────────────────────────────
   function build(starMeshes) {
     if (_points) {
@@ -268,14 +285,19 @@ const StarVisuals = (() => {
       const rawBright = Math.pow(sc / 0.04, 0.5);
 
       const spectralClass = mesh.spectralClass || "";
+      const lumMult = _lumClassMult(mesh.spectralType || "");
+      const isGiant = lumMult > 1.0; // true for giants and supergiants
 
-      // Spectral class brightness multiplier
+      // Spectral class brightness multiplier, boosted by luminosity class
       const sbTable = StarVisualsConfig.spectralBrightness;
       const sbMult =
         sbTable[spectralClass] !== undefined
           ? sbTable[spectralClass]
           : sbTable["_default"];
-      const brightness = Math.max(0.05, Math.min(1.0, rawBright * sbMult));
+      const brightness = Math.max(
+        0.05,
+        Math.min(1.0, rawBright * sbMult * lumMult),
+      );
 
       // Color: use calibrated spectralColors table if defined for this class,
       // otherwise fall back to mesh.material.color (original app color).
@@ -297,8 +319,8 @@ const StarVisuals = (() => {
         b = mesh.material.color.b;
       }
 
-      // noGlow: skip this star entirely — no sprite added to the Points object
-      if (scEntry && scEntry.noGlow) continue;
+      // noGlow: skip this star — unless it's a giant/supergiant (they glow regardless of class)
+      if (scEntry && scEntry.noGlow && !isGiant) continue;
 
       positions.push(mesh.position.x, mesh.position.y, mesh.position.z);
       brightnesses.push(brightness);
