@@ -12,7 +12,7 @@ const StarVisualsConfig = {
   haloSize: 1.0, // multiplier for halo spread (0.1 = tight, 2.0 = very wide)
   haloAmount: 0.4, // halo brightness (0 = no halo, 1 = very bright)
   haloFadeBelow: 2.0, // ly — halo fades out smoothly at camera distance <= this value
-  haloFadeAbove: 100.0, // ly — halo fades out smoothly at camera distance >= this value
+  haloFadeAbove: 50.0, // ly — halo fades out smoothly at camera distance >= this value
 
   // ── Core ────────────────────────────────────────────────────────────────────
   coreWidth: 0.2, // multiplier for Moffat PSF core radius (0.5 = sharp, 3.0 = bloated)
@@ -217,15 +217,19 @@ const StarVisuals = (() => {
       }
 
       // ── Moffat PSF core ────────────────────────────────────────────────────
-      float ca    = (0.04 + b * 0.06) * CORE_WIDTH;
+      // Core gets tighter with distance: far away a star is a sharp point,
+      // close up it has a soft photographic spread.
+      float caTight = mix(0.03, 1.0, haloFarFade);
+      float ca    = (0.04 + b * 0.06) * CORE_WIDTH * caTight;
       float core  = moffat(r, ca, 2.5);
       float sat   = smoothstep(0.0, ca * 3.0, r);
       vec3  coreC = mix(vec3(1.0), vColor, sat);
 
       // ── Saturated punch ────────────────────────────────────────────────────
+      // Punch is a bloom artifact (over-saturation) — fades with halo.
       float punch = 0.0;
       if (b > 0.55) {
-        punch = exp(-r * r / (0.022 * 0.022)) * (b - 0.55) * 2.5;
+        punch = exp(-r * r / (0.022 * 0.022)) * (b - 0.55) * 2.5 * haloFarFade;
       }
 
       // ── Composite ──────────────────────────────────────────────────────────
