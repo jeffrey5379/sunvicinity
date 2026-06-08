@@ -260,10 +260,10 @@ const StarVisuals = (() => {
   // same spectral letter; giants (III) are ~1.8×.
   function _lumClassMult(spectralType) {
     if (!spectralType) return 1.0;
-    if (/Ia/.test(spectralType)) return 5.0; // supergiants (Ia, Iab)
-    if (/Ib/.test(spectralType)) return 3.5; // bright supergiants
-    if (/II[^I]|II$/.test(spectralType)) return 2.5; // bright giants (II not III)
-    if (/III/.test(spectralType)) return 1.8; // giants
+    if (/Ia/.test(spectralType)) return 2.0; // supergiants (Ia, Iab)
+    if (/Ib/.test(spectralType)) return 1.8; // bright supergiants
+    if (/II[^I]|II$/.test(spectralType)) return 1.6; // bright giants (II not III)
+    if (/III/.test(spectralType)) return 1.4; // giants
     if (/IV/.test(spectralType)) return 1.2; // subgiants
     return 1.0; // V / VI / unknown
   }

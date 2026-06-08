@@ -127,6 +127,7 @@
         starPositions = [];
       var white = 0xffffff,
         turquoise = 0x1996af,
+        darkTurquoise = 0x082A30,
         gray = 0x161616,
         red = 0xff0000,
         orange = 0xcc6600,
@@ -244,6 +245,10 @@
         if (document.activeElement === searchEl) {
           return;
         }
+        var agentPanel = document.getElementById("sa-panel");
+        if (agentPanel && agentPanel.classList.contains("sa-open")) {
+          return;
+        }
         var dx, dy, dz;
         if ([87, 83, 65, 68].includes(event.keyCode)) {
           if (progress < 6 || animation != null) {
@@ -286,10 +291,6 @@
           camera.position.add(move);
           controls.target.add(move);
           camera.lookAt(controls.target);
-          if (arrow != undefined && scene.children.includes(arrow)) {
-            arrow.position.add(move);
-            arrow.lookAt(clusters[progress - 6].center);
-          }
           if (prevUpdate.distanceTo(controls.target) > lazyLoadDistance / 4) {
             updateScene(controls.target, true);
             updateScene(controls.target, false);
@@ -553,18 +554,60 @@
       
       function showArrow(show) {
         if (show) {
-          var geometry = new THREE.CylinderBufferGeometry(0, 0.03, 0.15, 24);
-          geometry.rotateX(Math.PI / 2);
-          var material = new THREE.MeshBasicMaterial({ color: gray });
-          arrow = new THREE.Mesh(geometry, material);
-          arrow.position.x = controls.target.x;
-          arrow.position.y = controls.target.y + 0.5;
-          arrow.position.z = controls.target.z;
+          var arrowGroup = new THREE.Group();
+
+          var mat = new THREE.MeshPhongMaterial({
+            color: darkTurquoise,
+            specular: 0x333333,
+            shininess: 0,
+            emissive: 0x000000,
+          });
+
+          var shaftGeom = new THREE.CylinderBufferGeometry(0.018, 0.018, 0.20, 24);
+          shaftGeom.rotateX(Math.PI / 2);
+          shaftGeom.translate(0, 0, -0.065);
+          arrowGroup.add(new THREE.Mesh(shaftGeom, mat));
+
+          var collarGeom = new THREE.CylinderBufferGeometry(0.028, 0.028, 0.018, 24);
+          collarGeom.rotateX(Math.PI / 2);
+          collarGeom.translate(0, 0, 0.028);
+          arrowGroup.add(new THREE.Mesh(collarGeom, mat));
+
+          var headGeom = new THREE.CylinderBufferGeometry(0, 0.075, 0.145, 24);
+          headGeom.rotateX(Math.PI / 2);
+          headGeom.translate(0, 0, 0.110);
+          arrowGroup.add(new THREE.Mesh(headGeom, mat));
+
+          var kl = new THREE.PointLight(0xffffff, 1.6, 1.6);
+          kl.position.set(0.4, 0.5, 0.4);
+          arrowGroup.add(kl);
+
+          var fl = new THREE.PointLight(0xaaddff, 0.7, 1.6);
+          fl.position.set(-0.45, 0.2, 0.35);
+          arrowGroup.add(fl);
+
+          var rl = new THREE.PointLight(0x33bbdd, 0.9, 1.0);
+          rl.position.set(0.0, -0.4, -0.3);
+          arrowGroup.add(rl);
+
+          // 20% larger overall, flattened 65% in vertical (Y) plane
+          arrowGroup.scale.set(1.2, 0.35, 1.2);
+
+          arrow = arrowGroup;
+          updateArrowHud();
           arrow.lookAt(clusters[progress - 6].center);
           scene.add(arrow);
         } else {
           scene.remove(arrow);
+          arrow = undefined;
         }
+      }
+
+      function updateArrowHud() {
+        if (arrow == undefined || !scene.children.includes(arrow)) return;
+        var offset = new THREE.Vector3(-1.85, 0.6, -3.0);
+        offset.applyQuaternion(camera.quaternion);
+        arrow.position.copy(camera.position).add(offset);
       }
       
       function onDocumentMouseDown(event) {
@@ -696,7 +739,8 @@
             showConstellations(false);
             animation = ANIMATION.CLUSTER_ONE;
             controls.enabled = false;
-            scene.remove(arrow);
+            //scene.remove(arrow);
+            showArrow(false);
             object.material.color.setHex(turquoise);
             intersects = intersects.filter((line) => line.object.parent.apptype == APPTYPE.CLUSTER_LABEL);
             activeCluster = intersects[0].object.parent;
@@ -1114,10 +1158,6 @@
           camera.position.add(move);
           controls.target.add(move);
           camera.lookAt(controls.target);
-          if (arrow != undefined && scene.children.includes(arrow)) {
-            arrow.position.add(move);
-            arrow.lookAt(clusters[progress - 6].center);
-          }
           if (currentStep >= animationSteps) {
             animation = null;
             updateScene(activeStar.position, false);
@@ -1197,22 +1237,26 @@
           camera.position.add(cameramove);
           camera.lookAt(controls.target);
           if (currentStep >= clusterAnimationSteps) {
-            scene.add(arrow);
-            arrow.position.x = controls.target.x;
-            arrow.position.y = controls.target.y + 0.5;
-            arrow.position.z = controls.target.z;
-            arrow.lookAt(clusters[progress - 6].center);
+            //scene.add(arrow);
+            setTimeout(() => {
+              showArrow(true);
+            }, 1000);
+            
             controls.enabled = true;
             animation = null;
             currentStep = 0;
             showConstellations(constBefore);
           }
         }
+        if (arrow != undefined && scene.children.includes(arrow) && clusters[progress - 6]) {
+          updateArrowHud();
+          arrow.lookAt(clusters[progress - 6].center);
+        }
         adjustStars();
         renderBloom();
         finalComposer.render();
       }
-      
+
       function adjustStars() {
         for (var obj of scene.children) {
           if (obj.apptype == APPTYPE.STAR) {
