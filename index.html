@@ -13,7 +13,7 @@
   <body>
     <div id="header">
       <span id="state"></span>
-      <span id="info">Loading. Please wait.</span>
+      <span id="info">Loading... Please wait</span>
     </div>
 
     <script src="star-agent.js"></script>
@@ -54,9 +54,9 @@
       const FEEDBACK_MESSAGE = "Your feedback is always welcome: jeffrey3829@proton.me";
       const ABOUT_MESSAGE = "Stars brightness and size not to scale. Do not consider as a source of reliable data. Please use Chrome for a better experience. This model has made use of the SIMBAD database, CDS, Strasbourg Astronomical Observatory, France.";
       const CONS_STAGE = "Looks like some constellations names are misplaced. Will you be able to find pairs of incorrectly named constellations? Click the constellations names which are out of place.";
-      const CONS_HIT = "        Well done! Let's put them in their place.";
-      const CONS_MISS = "                  No,these two are in place.";
-      const CONS_PART_MISS = "            One of these two is misplaced. Take a closer look.";
+      const CONS_HIT = "Well done! Let's put them in their place.";
+      const CONS_MISS = "No, these two are in place.";
+      const CONS_PART_MISS = "One of these two is misplaced. Take a closer look.";
       const CONS_COMPLETED = "Hooray! Now all constellations are in place. The setting to hide/show constellations is available now.";
       const STARS_STAGE = "Let's find the most interesting neighboring stars. Use 'Go to Sun' if you got lost. ";
       const STARS_TO_VISIT = [
@@ -245,8 +245,7 @@
         if (document.activeElement === searchEl) {
           return;
         }
-        var agentPanel = document.getElementById("sa-panel");
-        if (agentPanel && agentPanel.classList.contains("sa-open")) {
+        if (document.activeElement && document.activeElement.id === "sa-input") {
           return;
         }
         var dx, dy, dz;

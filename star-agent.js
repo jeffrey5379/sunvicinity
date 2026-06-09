@@ -845,6 +845,14 @@ Communication style: friendly, enthusiastic, concise. Respond in the user's lang
     });
     document.getElementById("sa-api-save").onclick = saveApiKey;
 
+    document.addEventListener("mousedown", (e) => {
+      const panel = document.getElementById("sa-panel");
+      const input = document.getElementById("sa-input");
+      if (input && panel && !panel.contains(e.target)) {
+        input.blur();
+      }
+    });
+
     // Welcome message
     setTimeout(() => {
       if (getApiKey()) {
