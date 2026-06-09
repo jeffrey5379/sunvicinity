@@ -48,9 +48,10 @@ canvas {
 
 #info {
 	display: flex;
+	flex: 1;
 	margin-right: 320px;
 	margin-left: 10px;
-	justify-content: center
+	justify-content: center;
 }
 
 .c>input[type=text] {
