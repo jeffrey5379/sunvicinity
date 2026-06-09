@@ -49,6 +49,7 @@
       import { RenderPass } from "./jsm/postprocessing/RenderPass.js";
       import { ShaderPass } from "./jsm/postprocessing/ShaderPass.js";
       import { UnrealBloomPass } from "./jsm/postprocessing/UnrealBloomPass.js";
+      import { createNebula, updateNebula } from "./star-nebula.js";
       
       const WELCOME_MESSAGE = "Welcome to the vicinity of the Sun. Switch to exploratory mode to study the mechanics of the model or navigate between stars in free mode.";
       const FEEDBACK_MESSAGE = "Your feedback is always welcome: jeffrey3829@proton.me";
@@ -406,6 +407,7 @@
       await readNames();
       await readClusters();
       await setupScene();
+      createNebula(scene, starPositions);
       StarAgent.init({ scene: scene, camera: camera, controls: controls, stars: starPositions, names: starNames });
       StarAgent.setNavigator(function(simbadId) {
         var star = starPositions.find(function(s) { return s.name === simbadId; });
@@ -435,7 +437,7 @@
       }
       
       function readColours() {
-        fetch("./files/wub.txt")
+        fetch("./files/stars_classes.txt")
           .then((res) => res.text())
           .then((text) => {
             for (let colour of text.split("\n")) {
@@ -452,7 +454,7 @@
       }
       
       function readNames() {
-        fetch("./files/efs.txt")
+        fetch("./files/stars_names.txt")
           .then((res) => res.text())
           .then((text) => {
             for (let line of text.split("\n")) {
@@ -467,7 +469,7 @@
       }
       
       function readClusters() {
-        fetch("./files/baz.txt")
+        fetch("./files/clusters.txt")
           .then((res) => res.text())
           .then((text) => {
             for (let line of text.split("\n")) {
@@ -609,6 +611,8 @@
         arrow.position.copy(camera.position).add(offset);
       }
       
+
+
       function onDocumentMouseDown(event) {
         mouseDownX = event.clientX;
         mouseDownY = event.clientY;
@@ -623,12 +627,8 @@
         var object;
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-        if (
-          Math.abs(mouseDownX - event.clientX) > 5 ||
-          Math.abs(mouseDownY - event.clientY) > 5
-        ) {
-          return;
-        }
+        if (Math.abs(mouseDownX - event.clientX) > 5 || Math.abs(mouseDownY - event.clientY) > 5) return;
+        
         raycaster.setFromCamera(mouse, camera);
         var intersects = raycaster.intersectObjects(scene.children);
         var isAllConlines = intersects.length > 0 && intersects.every((obj) => obj.object.apptype == APPTYPE.CONLINE);
@@ -1078,7 +1078,7 @@
       }
       
       function readConstellationData() {
-        fetch("./files/guz.txt")
+        fetch("./files/cons_lines.txt")
           .then((res) => res.text())
           .then((text) => {
             for (let line of text.split("\n")) {
@@ -1093,7 +1093,7 @@
             }
           })
           .catch((e) => console.error(e));
-        fetch("./files/psu.txt")
+        fetch("./files/constellations.txt")
           .then((res) => res.text())
           .then((text) => {
             var groups = [];
@@ -1251,6 +1251,7 @@
           updateArrowHud();
           arrow.lookAt(clusters[progress - 6].center);
         }
+        updateNebula(camera);
         adjustStars();
         renderBloom();
         finalComposer.render();
