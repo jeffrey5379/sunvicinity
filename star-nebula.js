@@ -1,4 +1,4 @@
-import * as THREE from './build/three.module.js';
+import * as THREE from 'three';
 
 let nebulaMesh = null;
 
@@ -158,7 +158,7 @@ export function createNebula(scene, starPositions) {
     side: THREE.BackSide,
   });
 
-  nebulaMesh = new THREE.Mesh(new THREE.BoxBufferGeometry(1.6, 1.6, 1.6), mat);
+  nebulaMesh = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.6, 1.6), mat);
   nebulaMesh.position.copy(star.position);
   scene.add(nebulaMesh);
 }

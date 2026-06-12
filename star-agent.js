@@ -848,8 +848,12 @@ Communication style: friendly, enthusiastic, concise. Respond in the user's lang
     document.addEventListener("mousedown", (e) => {
       const panel = document.getElementById("sa-panel");
       const input = document.getElementById("sa-input");
+      const apiKeyInput = document.getElementById("sa-api-input");
       if (input && panel && !panel.contains(e.target)) {
         input.blur();
+      }
+      if (apiKeyInput && panel && !panel.contains(e.target)) {
+        apiKeyInput.blur();
       }
     });
 
