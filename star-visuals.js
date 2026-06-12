@@ -260,11 +260,11 @@ const StarVisuals = (() => {
   // same spectral letter; giants (III) are ~1.8×.
   function _lumClassMult(spectralType) {
     if (!spectralType) return 1.0;
-    if (/Ia/.test(spectralType)) return 1.5; // supergiants (Ia, Iab)
-    if (/Ib/.test(spectralType)) return 1.4; // bright supergiants
-    if (/II[^I]|II$/.test(spectralType)) return 1.3; // bright giants (II not III)
-    if (/III/.test(spectralType)) return 1.2; // giants
-    if (/IV/.test(spectralType)) return 1.1; // subgiants
+    if (/Ia/.test(spectralType)) return 2.0; // supergiants (Ia, Iab)
+    if (/Ib/.test(spectralType)) return 1.8; // bright supergiants
+    if (/II[^I]|II$/.test(spectralType)) return 1.6; // bright giants (II not III)
+    if (/III/.test(spectralType)) return 1.4; // giants
+    if (/IV/.test(spectralType)) return 1.2; // subgiants
     return 1.0; // V / VI / unknown
   }
 
@@ -300,7 +300,7 @@ const StarVisuals = (() => {
           : sbTable["_default"];
       const brightness = Math.max(
         0.05,
-        Math.min(1.0, rawBright * sbMult * lumMult),
+        Math.min(1.0, rawBright * sbMult),
       );
 
       // Color: use calibrated spectralColors table if defined for this class,
@@ -330,7 +330,7 @@ const StarVisuals = (() => {
       brightnesses.push(brightness);
       colors.push(r, g, b);
       const glowMaxDist =
-        scEntry && scEntry.glowMaxDist != null ? scEntry.glowMaxDist : 500.0;
+        (scEntry && scEntry.glowMaxDist != null ? scEntry.glowMaxDist : 500.0) * lumMult;
       glowMaxDists.push(glowMaxDist);
     }
 
