@@ -1,0 +1,156 @@
+* alf Cen A|* bet Cen|* eps Cen|* gam Cen|* sig Cen|* rho Cen|* omi01 Cen
+* pi. Cen|* del Cen|* sig Cen
+* gam Cen|* zet Cen|* eps Cen
+* kap Cen|* eta Cen|* phi Cen|* ups01 Cen|* zet Cen|* mu. Cen|* d Cen|* iot Cen|* l Cen
+* mu. Cen|* nu. Cen|* tet Cen|* psi Cen|* chi Cen|* phi Cen
+* rho Hya|* eta Hya|* sig Hya|* del Hya|* eps Hya|* zet Hya|* tet Hya|* iot Hya|* alf Hya|* ups01 Hya|* lam Hya|* mu. Hya|* nu. Hya
+* E Hya|* pi. Hya|* gam Hya|* bet Hya|* ksi Hya|* bet Crt|* alf Crt|* nu. Hya
+* iot Ant|* alf Ant|* eps Ant
+* mu. Vel|* phi Vel|* kap Vel|* del Vel|* gam Vel|* lam Vel|* psi Vel|* mu. Vel
+* gam Pyx|* alf Pyx|* bet Pyx
+* nu. Pup|* pi. Pup|* p Pup|* k02 Pup|* ksi Pup|* rho Pup|* zet Pup
+* p Pup|* l Pup|* ksi Pup
+* alf Car|* chi Car|* eps Car|* iot Car|* q Car|* p Car|* tet Car|* ome Car|* bet Car
+* tet Car|* z Car|* y Car|* x Car|* u Car|* eta Car|* p Car
+* alf Cha|* gam Cha|* eps Cha|* bet Cha|* del01 Cha|* gam Cha
+* lam Mus|* eps Mus|* alf Mus|* bet Mus|* del Mus|* gam Mus|* alf Mus
+* alf Cru|* gam Cru
+* bet Cru|* del Cru
+* bet Cir|* alf Cir|* gam Cir
+* alf Tri|* bet Tri|* gam Tri|* alf Tri
+* alf Aps|* del01 Aps|* bet Aps|* gam Aps
+* bet Oct|* nu. Oct|* del Oct|* bet Oct
+* alf Men|* gam Men|* eta Men|* bet Men
+* alf Vol|* bet Vol|* eps Vol|* del Vol|* gam01 Vol|* eps Vol|* alf Vol
+* gam Dor|* alf Dor|* zet Dor|* bet Dor|* del Dor
+* del Dor|* 36 Dor|* bet Dor|* alf Dor
+* alf Ret|* bet Ret|* del Ret|* eps Ret|* alf Ret
+* alf Hyi|* bet Hyi|* gam Hyi|* alf Hyi
+* alf Tuc|* del Tuc|* eps Tuc|* zet Tuc|* bet01 Tuc|* gam Tuc|* alf Tuc
+* alf Ind|* eta Ind|* bet Ind|* del Ind|* tet Ind|* alf Ind
+* eta Pav|* pi. Pav|* kap Pav|* del Pav|* zet Pav
+* pi. Pav|* ksi Pav|* lam Pav|* del Pav|* alf Pav|* gam Pav|* bet Pav|* del Pav|* eps Pav
+* tet Ara|* alf Ara|* bet Ara
+* gam Ara|* del Ara|* eta Ara|* zet Ara|* eps01 Ara|* alf Ara
+* eps Nor|* del Nor|* eta Nor|* gam02 Nor|* eps Nor
+* alf Lup|* zet Lup|* mu. Lup|* eps Lup|* gam Lup|* del Lup|* bet Lup
+* zet Lup|* eta Lup|* chi Lup|* phi01 Lup|* eta Lup|* gam Lup
+* G Sco|* lam Sco|* ups Sco|* kap Sco|* iot Sco|* tet Sco|* eta Sco|* zet01 Sco|* mu. Sco|* eps Sco|* tau Sco|* alf Sco|* sig Sco|* del Sco
+* rho Sco|* pi. Sco|* del Sco|* bet Sco|* nu. Sco
+* eta Sgr|* eps Sgr|* gam Sgr|* del Sgr|* lam Sgr|* mu. Sgr
+* lam Sgr|* phi Sgr|* sig Sgr|* tau Sgr|* zet Sgr|* eps Sgr|* del Sgr|* phi Sgr|* zet Sgr
+* eps Tel|* alf Tel|* zet Tel
+* gam CrA|* alf CrA|* bet CrA|* del CrA|* tet CrA
+* del Cap|* eps Cap|* zet Cap|* ome Cap|* psi Cap|* bet Cap|* alf01 Cap|* tet Cap|* gam Cap|* del Cap
+* eps Aqr|* bet Aqr|* iot Aqr
+* bet Aqr|* alf Aqr|* pi. Aqr|* zet Aqr|* eta Aqr
+* zet Aqr|* gam Aqr|* alf Aqr|* tet Aqr|* lam Aqr|* phi Aqr|* psi02 Aqr|* del Aqr|* tau Aqr|* lam Aqr
+* alf PsA|* eps PsA|* mu. PsA|* tet PsA|* iot PsA|* mu. PsA|* bet PsA|* gam PsA|* del PsA|* alf PsA
+* gam Gru|* lam Gru|* mu.01 Gru|* del01 Gru|* bet Gru|* eps Gru|* zet Gru
+* del01 Gru|* alf Gru|* bet Gru
+* alf Mic|* gam Mic|* del Mic|* eps Mic|* zet Mic|* alf Mic
+* bet Aql|* alf Aql|* gam Aql|* del Aql|* tet Aql|* iot Aql|* lam Aql|* zet Aql|* eps Aql
+* zet Aql|* del Aql|* lam Aql
+* ome Her|* gam Her|* bet Her|* alf Her|* del Her|* lam Her|* mu. Her|* ksi Her|* omi Her
+* iot Her|* tet Her|* rho Her|* pi. Her|* eps Her|* del Her
+* bet Her|* zet Her|* eps Her
+* zet Her|* eta Her|* pi. Her
+* eta Her|* sig Her|* tau Her|* phi Her|* chi Her
+* alf Vul|* 13 Vul|* 15 Vul|* 23 Vul
+* alf Sge|* del Sge|* gam Sge
+* del Sge|* bet Sge|* eps Sge
+* eps Del|* bet Del|* alf Del|* gam01 Del|* del Del|* bet Del
+* alf Equ|* del Equ|* gam Equ
+* eps Peg|* tet Peg|* zet Peg|* alf Peg|* bet Peg|* lam Peg|* iot Peg|* kap Peg
+* alf Peg|* gam Peg|* alf And|* bet Peg|* eta Peg|* pi. Peg
+* eta And|* zet And|* eps And|* del And|* bet And|* gam And
+* alf And|* del And|* pi. And|* bet And|* mu. And|* nu. And|* phi And|* 51 And
+* pi. And|* iot And|* kap And|* lam And
+* iot And|* omi And
+* omi Per|* zet Per|* ksi Per|* eps Per|* del Per|* 48 Per|* mu. Per|* b Per|* lam Per
+* eps Per|* bet Per|* rho Per
+* bet Per|* kap Per|* iot Per|* alf Per|* del Per
+* alf Per|* gam Per|* eta Per|* tau Per|* gam Per
+* tau Per|* iot Per|* tet Per|* phi Per
+* bet Aur|* alf Aur|* eta Aur|* iot Aur|* tet Aur|* bet Aur|* del Aur|* alf Aur|* eps Aur|* zet Aur
+* bet Tau|* eps Tau|* del01 Tau|* gam Tau|* alf Tau|* zet Tau
+* gam Tau|* lam Tau|* ksi Tau|* nu. Tau
+* omi Tau|* 10 Tau
+* nu. Ori|* chi01 Ori|* chi02 Ori|* ksi Ori|* mu. Ori|* alf Ori|* lam Ori|* gam Ori|* alf Ori|* zet Ori|* eps Ori|* del Ori|* gam Ori|* pi03 Ori
+* pi06 Ori|* pi05 Ori|* pi04 Ori|* pi03 Ori|* pi02 Ori|* pi01 Ori|* omi02 Ori|* 11 Ori
+* zet Ori|* kap Ori
+* del Ori|* eta Ori|* bet Ori
+* alf Mon|* zet Mon|* del Mon|* bet Mon|* gam Mon
+* del Mon|* 18 Mon|* eps Mon A|* 13 Mon|* 15 Mon
+* 13 Mon|* 18 Mon
+* eta CMa|* del CMa|* eps CMa|* omi01 CMa|* nu02 CMa|* bet CMa|* alf CMa|* del CMa
+* alf CMa|* iot CMa|* gam CMa|* tet CMa|* iot CMa
+* del Col|* gam Col|* bet Col|* eta Col
+* bet Col|* alf Col|* eps Col
+* alf Pic|* gam Pic|* bet Pic
+* alf Hor|* iot Hor|* eta Hor|* zet Hor|* mu. Hor|* bet Hor
+* alf Eri|* chi Eri|* kap Eri|* iot Eri|* tet01 Eri|* 82 Eri|* y Eri|HD 23958|* 41 Eri|* 43 Eri|* ups02 Eri|* ups01 Eri
+* ups01 Eri|* tau09 Eri|* tau08 Eri|* tau06 Eri|* tau05 Eri|* tau04 Eri|* tau03 Eri|* tau01 Eri|* eta Eri
+* eta Eri|* eps Eri|* del Eri|* pi. Eri|* gam Eri|* omi01 Eri|* nu. Eri|* mu. Eri|* bet Eri
+* alf For|* bet For|* nu. For
+* sig Leo|* iot Leo|* tet Leo|* bet Leo|* del Leo|* tet Leo|* eta Leo|* alf Leo
+* del Leo|* gam Leo|* eta Leo|* eps Leo|* mu. Leo|* zet Leo|* gam Leo
+* eps Leo|* lam Leo|* kap Leo|* mu. Leo
+* eta Crt|* zet Crt|* gam Crt|* bet Crt|* alf Crt|* del Crt|* eps Crt|* tet Crt
+* gam Crt|* del Crt
+* alf Crv|* eps Crv|* bet Crv|* del Crv|* gam Crv|* eps Crv
+* alf Vir|* tet Vir|* gam Vir|* eta Vir|* bet Vir|* nu. Vir|* omi Vir|* eta Vir
+* eps Vir|* del Vir|* gam Vir|* zet Vir|* iot Vir|* mu. Vir
+* zet Vir|* tau Vir|* 109 Vir
+* alf Lyr|* zet01 Lyr|* del Lyr|* gam Lyr|* bet Lyr|* zet01 Lyr|* eps01 Lyr A|* alf Lyr
+* bet01 Cyg|* eta Cyg|* gam Cyg|* del Cyg|* iot Cyg|* kap Cyg
+* iot Cyg|* omi02 Cyg|* alf Cyg|* nu. Cyg|* zet Cyg|* eps Cyg|* gam Cyg|* alf Cyg
+* 1 Lac|HD 211073|* 6 Lac|* 2 Lac|* 5 Lac|* 4 Lac|* bet Lac|* alf Lac|* 5 Lac|* 11 Lac|* 6 Lac
+* bet Cas|* alf Cas|* gam Cas|* del Cas|* eps Cas
+* 7 Cam|* bet Cam|* alf Cam|* gam Cam|V* BE Cam|HD 21291
+* alf Cam|HD 42818|HD 49878
+* eta UMa|* zet01 UMa|* eps UMa|* del UMa|* alf UMa|* h UMa|* omi UMa|* ups UMa|* tet UMa|* kap UMa|* iot UMa
+* h UMa|* ups UMa|* bet UMa|* alf UMa
+* del UMa|* gam UMa|* bet UMa
+* gam UMa|* chi UMa|* nu. UMa|* ksi UMa B
+* chi UMa|* psi UMa|* mu. UMa|* lam UMa
+* 10 LMi|* 21 LMi|* bet LMi|* 46 LMi|* 30 LMi|* 21 LMi
+* alf Lyn|* 38 Lyn|HD 77912|* 10 UMa|* 31 Lyn|* 21 Lyn|* 15 Lyn|* 2 Lyn
+* alf Cnc|* del Cnc|* bet Cnc
+* del Cnc|* gam Cnc|* iot Cnc
+* alf CMi|* bet CMi
+* gam Sex|* alf Sex|* bet Sex|* del Sex
+* alf Com|* bet Com|* gam Com
+* zet Boo|* alf Boo|* eps Boo|* del Boo|* bet Boo|* gam Boo|* lam Boo|* tet Boo|* kap01 Boo|* lam Boo
+* gam Boo|* rho Boo|* alf Boo|* eta Boo|* tau Boo
+* ksi Dra|* gam Dra|* bet Dra|* nu.01 Dra|* ksi Dra|* del Dra|* eps Dra
+* del Dra|* phi Dra|* chi Dra
+* phi Dra|* zet Dra|* eta Dra|* tet Dra|* iot Dra|* alf Dra|* kap Dra|* lam Dra
+* alf Cep|* bet Cep|* gam Cep|* iot Cep|* bet Cep
+* iot Cep|* del Cep|* zet Cep|* eps Cep|* mu. Cep|* alf Cep|* eta Cep|* tet Cep
+* alf UMi|* del UMi|* eps UMi|* zet UMi|* bet UMi|* gam UMi|* eta UMi|* zet UMi
+* rho Oph A|* psi Oph|* phi Oph|* zet Oph|* ups Oph|* eps Oph|* del Oph|* lam Oph|* kap Oph|* zet Oph|* eta Oph|* bet Oph|* alf Oph|* kap Oph
+* bet Oph|* gam Oph|* nu. Oph|* ksi Ser|* eta Oph|* tet Oph|* d Oph
+* tet01 Ser|* eta Ser|* nu. Oph
+* mu. Ser|* eps Ser|* alf Ser|* del Ser|* bet Ser|* gam Ser|* kap Ser|* iot Ser|* bet Ser
+* alf Sct|* bet Sct|* del Sct|* gam Sct|* alf Sct
+* tau Lib|* ups Lib|* gam Lib|* bet Lib|* alf01 Lib|* sig Lib
+* gam Lib|* alf01 Lib
+* tet CrB|* bet CrB|* alf CrB|* gam CrB|* del CrB|* eps CrB|* iot CrB
+* alf02 CVn|* bet CVn
+* gam01 Ari|* bet Ari|* alf Ari|* 41 Ari
+* phi Psc|* ups Psc|* tau Psc|* phi Psc|* eta Psc|* omi Psc|* alf Psc
+* iot Psc|* lam Psc|* kap Psc|* gam Psc|* tet Psc|* iot Psc|* ome Psc|* del Psc|* eps Psc|* zet Psc A|* mu. Psc|* nu. Psc|* ksi Psc|* alf Psc
+* zet Cet|* tau Cet|* bet Cet|* iot Cet|* eta Cet|* tet Cet|* zet Cet
+* gam Cet|* alf Cet|* lam Cet|* mu. Cet|* ksi02 Cet|* gam Cet|* del Cet|* omi Cet|* zet Cet
+* alf Scl|* iot Scl|* del Scl|* gam Scl|* bet Scl
+* bet Phe A|* alf Phe|* eps Phe|* bet Phe A|* zet Phe|* del Phe|* gam Phe|* bet Phe A
+* del Cae|* alf Cae|* bet Cae|* gam Cae
+* ksi Gem|* lam Gem|* del Gem|* zet Gem|* gam Gem
+* del Gem|* ups Gem|* kap Gem
+* bet Gem|* ups Gem|* iot Gem|* tau Gem|* alf Gem
+* tet Gem|* tau Gem|* eps Gem|* nu. Gem
+* eps Gem|* mu. Gem|* eta Gem|* 1 Gem
+* alf TrA|* bet TrA|* eps TrA|* gam TrA|* alf TrA
+* alf Lep|* zet Lep|* eta Lep|* tet Lep|* del Lep|* gam Lep|* bet Lep
+* lam Lep|* mu. Lep|* alf Lep|* bet Lep|* eps Lep|* mu. Lep|* kap Lep

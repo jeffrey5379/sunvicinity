@@ -1,0 +1,7 @@
+B kB OB (B sdB O sdO|0x1919fa
+A W D ?+D hA kA knA dC sdA (A|0xffffff
+F sdF kF keF dF sd+F hF sd:F sd?F (F|0xffff7d
+G sdG sd?G gG sd:G mid-G (G|0xffff00
+K dK ?+K esdK (e)sdK <K usdK sdK sd:K (K|0xc81900
+M V g0V k4V dM sdM ?+M <M >M d/sdM s/sdM esdM (sd)M sd/esdM usdM sd:M C wkC N sd WC R S III PG m d 4 protoELMD ~|0x0c0000
+L sdL ?+L esdL T sdT Y|0x050000
