@@ -62,6 +62,15 @@ canvas {
 	border-left: 1px solid white !important;
 }
 
+.lil-gui .controller.function .widget {
+	padding-left: var(--name-width);
+}
+
+.lil-gui .controller.function button {
+	width: auto;
+	padding: 0 .55em;
+}
+
 .hidden {
 	display: none !important;
 }
