@@ -33,7 +33,7 @@
       varying vec2 vUv;
 
       vec4 getTexture( sampler2D texelToLinearTexture ) {
-      	return mapTexelToLinear( texture2D( texelToLinearTexture , vUv ) );
+      	return texture2D( texelToLinearTexture , vUv );
       }
 
       void main() {
@@ -42,14 +42,15 @@
     </script>
 
     <script type="module">
-      import * as THREE from "./build/three.module.js";
-      import { GUI } from "./jsm/libs/dat.gui.module.js";
-      import { OrbitControls } from "./jsm/controls/OrbitControls.js";
-      import { EffectComposer } from "./jsm/postprocessing/EffectComposer.js";
-      import { RenderPass } from "./jsm/postprocessing/RenderPass.js";
-      import { ShaderPass } from "./jsm/postprocessing/ShaderPass.js";
-      import { UnrealBloomPass } from "./jsm/postprocessing/UnrealBloomPass.js";
+      import * as THREE from "three";
+      import { GUI } from "three/examples/jsm/libs/dat.gui.module.js";
+      import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+      import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+      import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+      import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
+      import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
       import { createNebula, updateNebula } from "./star-nebula.js";
+      window.THREE = THREE;
       
       const WELCOME_MESSAGE = "Welcome to the vicinity of the Sun. Switch to exploratory mode to study the mechanics of the model or navigate between stars in free mode.";
       const FEEDBACK_MESSAGE = "Your feedback is always welcome: jeffrey3829@proton.me";
@@ -135,15 +136,8 @@
         yellow = 0xffff00;
       var conGameActive = false,
         clustersStageActive = false,
-        constBefore,
-        chosenCon,
-        pairCon,
-        arrow,
-        actualMessage,
-        foundStar,
-        activeStar,
-        activeCluster,
-        sun;
+        constBefore, chosenCon, pairCon, arrow, actualMessage,
+        foundStar, activeStar, activeCluster, sun;
       var chosenConSteps = [],
         pairConSteps = [],
         starColours = [],
@@ -156,7 +150,7 @@
         lazyLoadDistance = 80.0,
         discoverDistance = 40.0;
       var prevUpdate = new THREE.Vector3(),
-        starGeometry = new THREE.IcosahedronBufferGeometry(1, 4);
+        starGeometry = new THREE.IcosahedronGeometry(1, 4);
       var progress = 0,
         SMOOTH_MESSAGE_TIMEOUT = 30,
         mouseDownX, mouseDownY;
@@ -239,14 +233,14 @@
       finalComposer.addPass(shaderPass);
       var raycaster = new THREE.Raycaster(),
         mouse = new THREE.Vector2();
-      window.addEventListener("mouseup", onDocumentMouseUp, false);
-      window.addEventListener("mousedown", onDocumentMouseDown, false);
+      window.addEventListener("pointerup", onDocumentMouseUp, false);
+      window.addEventListener("pointerdown", onDocumentMouseDown, false);
       window.addEventListener("mousemove", onSphereHover, false);
       document.addEventListener("keydown", function (event) {
         if (document.activeElement === searchEl) {
           return;
         }
-        if (document.activeElement && document.activeElement.id === "sa-input") {
+        if (document.activeElement && (document.activeElement.id === "sa-input" || document.activeElement.id === "sa-api-input")) {
           return;
         }
         var dx, dy, dz;
@@ -263,29 +257,27 @@
             dy *= multiply;
             dz *= multiply;
           }
-        }
-        switch (event.keyCode) {
-          case 87:
-            dx = -dx;
-            dy = -dy;
-            dz = -dz;
-            break;
-          case 83:
-            break;
-          case 65:
-            dy = 0.0;
-            var temp = dx;
-            dx = -dz;
-            dz = temp;
-            break;
-          case 68:
-            dy = 0.0;
-            var temp = dx;
-            dx = dz;
-            dz = -temp;
-            break;
-        }
-        if ([87, 83, 65, 68].includes(event.keyCode)) {
+          switch (event.keyCode) {
+            case 87:
+              dx = -dx;
+              dy = -dy;
+              dz = -dz;
+              break;
+            case 83:
+              break;
+            case 65:
+              dy = 0.0;
+              var temp = dx;
+              dx = -dz;
+              dz = temp;
+              break;
+            case 68:
+              dy = 0.0;
+              var temp = dx;
+              dx = dz;
+              dz = -temp;
+              break;
+          }
           StarAgent.setActiveStar(null);
           var move = new THREE.Vector3(dx, dy, dz);
           camera.position.add(move);
@@ -564,17 +556,17 @@
             emissive: 0x000000,
           });
 
-          var shaftGeom = new THREE.CylinderBufferGeometry(0.018, 0.018, 0.20, 24);
+          var shaftGeom = new THREE.CylinderGeometry(0.018, 0.018, 0.20, 24);
           shaftGeom.rotateX(Math.PI / 2);
           shaftGeom.translate(0, 0, -0.065);
           arrowGroup.add(new THREE.Mesh(shaftGeom, mat));
 
-          var collarGeom = new THREE.CylinderBufferGeometry(0.028, 0.028, 0.018, 24);
+          var collarGeom = new THREE.CylinderGeometry(0.028, 0.028, 0.018, 24);
           collarGeom.rotateX(Math.PI / 2);
           collarGeom.translate(0, 0, 0.028);
           arrowGroup.add(new THREE.Mesh(collarGeom, mat));
 
-          var headGeom = new THREE.CylinderBufferGeometry(0, 0.075, 0.145, 24);
+          var headGeom = new THREE.CylinderGeometry(0, 0.075, 0.145, 24);
           headGeom.rotateX(Math.PI / 2);
           headGeom.translate(0, 0, 0.110);
           arrowGroup.add(new THREE.Mesh(headGeom, mat));
@@ -606,12 +598,14 @@
 
       function updateArrowHud() {
         if (arrow == undefined || !scene.children.includes(arrow)) return;
-        var offset = new THREE.Vector3(-1.85, 0.6, -3.0);
+        var zDist = 3.0;
+        var halfH = Math.tan(camera.fov * Math.PI / 360) * zDist;
+        var halfW = halfH * (window.innerWidth / window.innerHeight);
+        var ndcX = (28 / window.innerWidth) * 2 - 1;
+        var offset = new THREE.Vector3(ndcX * halfW + 0.23, 0.6, -zDist);
         offset.applyQuaternion(camera.quaternion);
         arrow.position.copy(camera.position).add(offset);
       }
-      
-
 
       function onDocumentMouseDown(event) {
         mouseDownX = event.clientX;
@@ -632,10 +626,7 @@
         raycaster.setFromCamera(mouse, camera);
         var intersects = raycaster.intersectObjects(scene.children);
         var isAllConlines = intersects.length > 0 && intersects.every((obj) => obj.object.apptype == APPTYPE.CONLINE);
-        if (
-          intersects.length > 1 &&
-          intersects[0].object.position.distanceTo(camera.position) < 0.1
-        ) {
+        if (intersects.length > 1 && intersects[0].object.position.distanceTo(camera.position) < 0.1) {
           object = intersects[1].object;
         }
         if (conGameActive && (intersects.length == 0 || isAllConlines)) {
@@ -644,20 +635,12 @@
         if (clustersStageActive && intersects.length == 0) {
           intersects = raycaster.intersectObjects(clusterLabelLines);
         }
-        if (
-          intersects.length > 0 &&
-          animation == null &&
-          (intersects[0].object.apptype != undefined ||
-            intersects[0].object.parent.apptype != undefined)
-        ) {
+        if (intersects.length > 0 && animation == null &&
+          (intersects[0].object.apptype != undefined || intersects[0].object.parent.apptype != undefined)) {
           if (object == undefined) {
             object = intersects[0].object;
           }
-          if (
-            (object.position.distanceTo(camera.position) < 0.3 ||
-              object.apptype == APPTYPE.CONLINE) &&
-            intersects.length > 1
-          ) {
+          if ((object.position.distanceTo(camera.position) < 0.3 || object.apptype == APPTYPE.CONLINE) && intersects.length > 1) {
             for (var i = 1; i < intersects.length; i++) {
               if (object.apptype == APPTYPE.CONLINE) {
                 object = intersects[i].object;
@@ -666,13 +649,7 @@
               }
             }
           }
-          if (
-            object == undefined ||
-            object.apptype == APPTYPE.CONLINE ||
-            object.apptype == APPTYPE.BLACK_HOLE
-          ) {
-            return;
-          }
+          if (object == undefined || object.apptype == APPTYPE.CONLINE || object.apptype == APPTYPE.BLACK_HOLE) return;
           currentStep = 0;
           if (object.type === "Line" && object.parent.apptype == APPTYPE.CONLABEL && conGameActive) {
             object.material.color.setHex(turquoise);
@@ -738,7 +715,6 @@
             showConstellations(false);
             animation = ANIMATION.CLUSTER_ONE;
             controls.enabled = false;
-            //scene.remove(arrow);
             showArrow(false);
             object.material.color.setHex(turquoise);
             intersects = intersects.filter((line) => line.object.parent.apptype == APPTYPE.CLUSTER_LABEL);
@@ -1216,7 +1192,7 @@
           camera.lookAt(controls.target);
           if (currentStep >= animationSteps) {
             animation = ANIMATION.CLUSTER_TWO;
-            currentStep = 0;
+            currentStep = 1;
             var audio = new Audio("./files/ekm.mp3");
             audio.volume = 0.5;
             audio.play();
@@ -1229,14 +1205,13 @@
             }
           }
         }
+
         if (animation == ANIMATION.CLUSTER_TWO) {
-          
           var cameramove = new THREE.Vector3(cameraXstepsTwo[currentStep] - cameraXstepsTwo[currentStep - 1], 0.0, cameraZstepsTwo[currentStep] - cameraZstepsTwo[currentStep - 1]);
           currentStep++;
           camera.position.add(cameramove);
           camera.lookAt(controls.target);
           if (currentStep >= clusterAnimationSteps) {
-            //scene.add(arrow);
             setTimeout(() => {
               showArrow(true);
             }, 1000);
@@ -1262,7 +1237,7 @@
           if (obj.apptype == APPTYPE.STAR) {
             var distance = obj.position.distanceTo(camera.position);
             var red = obj.material.color.g == 0.0 && obj.material.color.b == 0.0;
-            var k = Math.sqrt(2 * distance) / 3;
+            var k = Math.sqrt(2 * distance) / 2;
             if (distance > lazyLoadDistance && obj.initialscale != DEFAULT_RADIUS) {
               continue;
             }

@@ -1,4 +1,4 @@
-import * as THREE from "./build/three.module.js";
+import * as THREE from "three";
 
 // ══════════════════════════════════════════════════════════════════════════════
 //  PARAMETERS — edit these to tune the visual appearance
@@ -260,11 +260,11 @@ const StarVisuals = (() => {
   // same spectral letter; giants (III) are ~1.8×.
   function _lumClassMult(spectralType) {
     if (!spectralType) return 1.0;
-    if (/Ia/.test(spectralType)) return 2.0; // supergiants (Ia, Iab)
-    if (/Ib/.test(spectralType)) return 1.8; // bright supergiants
-    if (/II[^I]|II$/.test(spectralType)) return 1.6; // bright giants (II not III)
-    if (/III/.test(spectralType)) return 1.4; // giants
-    if (/IV/.test(spectralType)) return 1.2; // subgiants
+    if (/Ia/.test(spectralType)) return 1.5; // supergiants (Ia, Iab)
+    if (/Ib/.test(spectralType)) return 1.4; // bright supergiants
+    if (/II[^I]|II$/.test(spectralType)) return 1.3; // bright giants (II not III)
+    if (/III/.test(spectralType)) return 1.2; // giants
+    if (/IV/.test(spectralType)) return 1.1; // subgiants
     return 1.0; // V / VI / unknown
   }
 
@@ -369,11 +369,6 @@ const StarVisuals = (() => {
     _points.renderOrder = 2;
     _points.raycast = () => {};
     _scene.add(_points);
-
-    console.log(
-      `[StarVisuals] Built ${positions.length / 3} stars — 1 draw call.`,
-    );
-    console.log("[StarVisuals] Config:", cfg);
   }
 
   // ── Per-frame update ──────────────────────────────────────────────────────────
