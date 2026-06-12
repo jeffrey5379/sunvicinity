@@ -126,6 +126,7 @@
         constellationNames = [],
         lines = [],
         spheres = [],
+        clickableObjects = [],
         conLabelLines = [],
         clusterLabelLines = [],
         starPositions = [];
@@ -489,7 +490,11 @@
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
         raycaster.setFromCamera(mouse, camera);
-        var intersects = raycaster.intersectObjects(scene.children);
+        var intersects = raycaster.intersectObjects(clickableObjects);
+        if (intersects.length === 0) {
+          var nearest = findNearestStarByScreenPos(mouse, 3);
+          if (nearest) intersects = [{ object: nearest}];
+        }
         if (intersects.length > 0 && !animation && intersects[0].object.text != undefined) {
           var object = intersects[0].object;
           if (object != activeStar) {
@@ -606,12 +611,30 @@
         arrow.position.copy(camera.position).add(offset);
       }
 
+      function findNearestStarByScreenPos(mouseNDC, pixelRadius) {
+        var _pos = new THREE.Vector3();
+        var nearest = null;
+        var minDistSq = pixelRadius * pixelRadius;
+        for (var i = 0; i < clickableObjects.length; i++) {
+          _pos.copy(clickableObjects[i].position).project(camera);
+          if (_pos.z >= 1) continue;
+          var dx = (_pos.x - mouseNDC.x) * window.innerWidth * 0.5;
+          var dy = (_pos.y - mouseNDC.y) * window.innerHeight * 0.5;
+          var distSq = dx * dx + dy * dy;
+          if (distSq < minDistSq) {
+            minDistSq = distSq;
+            nearest = clickableObjects[i];
+          }
+        }
+        return nearest;
+      }
+
       function onDocumentMouseDown(event) {
         mouseDownX = event.clientX;
         mouseDownY = event.clientY;
         showState("");
       }
-      
+
       async function onDocumentMouseUp(event) {
         if (!searchEl.contains(event.target)) {
           searchEl.blur();
@@ -623,7 +646,11 @@
         if (Math.abs(mouseDownX - event.clientX) > 5 || Math.abs(mouseDownY - event.clientY) > 5) return;
         
         raycaster.setFromCamera(mouse, camera);
-        var intersects = raycaster.intersectObjects(scene.children);
+        var intersects = raycaster.intersectObjects(clickableObjects);
+        if (intersects.length === 0) {
+          var nearest = findNearestStarByScreenPos(mouse, 3);
+          if (nearest) intersects = [{ object: nearest}];
+        }
         var isAllConlines = intersects.length > 0 && intersects.every((obj) => obj.object.apptype == APPTYPE.CONLINE);
         if (intersects.length > 1 && intersects[0].object.position.distanceTo(camera.position) < 0.1) {
           object = intersects[1].object;
@@ -827,6 +854,7 @@
                 spheres.push(sphere);
                 if (lazyLoadDistance > controls.target.distanceTo(sphere.position)) {
                   scene.add(sphere);
+                  clickableObjects.push(sphere);
                 }
               }
             }
@@ -1257,6 +1285,7 @@
       
       function recalculateCache(position) {
         spheres = [];
+        clickableObjects = [];
         for (var star of starPositions) {
           if (star.position.distanceTo(position) < cacheDistance) {
             var sphere = createStar(star.data);
@@ -1274,6 +1303,7 @@
         for (var sphere of spheres) {
           if (show && sphere.position.distanceTo(position) < lazyLoadDistance) {
             scene.add(sphere);
+            if (!clickableObjects.includes(sphere)) clickableObjects.push(sphere);
             if (sphere.name == foundStar) {
               activeStar = sphere;
               showLabel(sphere, true);
@@ -1282,6 +1312,8 @@
           }
           if (!show && sphere.position.distanceTo(position) > lazyLoadDistance) {
             scene.remove(sphere);
+            const idx = clickableObjects.indexOf(sphere);
+            if (idx !== -1) clickableObjects.splice(idx, 1);
           }
         }
         
