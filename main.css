@@ -36,7 +36,7 @@ canvas {
 	z-index: 1; /* TODO Solve this in HTML */
 }
 
-.dg.ac {
+.lil-gui {
 	z-index: 2 !important; /* TODO Solve this in HTML */
 }
 
@@ -54,14 +54,23 @@ canvas {
 	justify-content: center;
 }
 
-.c>input[type=text] {
+.lil-gui input[type=text] {
 	color: white !important;
 }
 
-.dg .cr.string {
+.lil-gui .controller.string {
 	border-left: 1px solid white !important;
 }
 
+.lil-gui .controller.function .widget {
+	padding-left: var(--name-width);
+}
+
+.lil-gui .controller.function button {
+	width: auto;
+	padding: 0 .55em;
+}
+
 .hidden {
-	display: none;
+	display: none !important;
 }

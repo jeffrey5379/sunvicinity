@@ -43,7 +43,8 @@
 
     <script type="module">
       import * as THREE from "three";
-      import { GUI } from "three/examples/jsm/libs/dat.gui.module.js";
+      import GUI from "three/examples/jsm/libs/lil-gui.module.min.js";
+      import { FontLoader } from "three/examples/jsm/loaders/FontLoader.js";
       import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
       import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
       import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
@@ -51,6 +52,7 @@
       import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
       import { createNebula, updateNebula } from "./star-nebula.js";
       window.THREE = THREE;
+      THREE.ColorManagement.enabled = false;
       
       const WELCOME_MESSAGE = "Welcome to the vicinity of the Sun. Switch to exploratory mode to study the mechanics of the model or navigate between stars in free mode.";
       const FEEDBACK_MESSAGE = "Your feedback is always welcome: jeffrey3829@proton.me";
@@ -170,7 +172,7 @@
         new Promise((resolve, reject) => {
           setTimeout((_) => resolve(), millis);
         });
-      var loader = new THREE.FontLoader();
+      var loader = new FontLoader();
       loader.load("urbanist_bold.json", function (kdp) {
         mainFont = kdp;
       });
@@ -192,6 +194,7 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.toneMapping = THREE.ReinhardToneMapping;
       renderer.toneMappingExposure = exposure;
+      renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
       document.body.appendChild(renderer.domElement);
       const state = document.getElementById("state");
       const info = document.getElementById("info");
@@ -291,8 +294,7 @@
           }
         }
       });
-      var gui = new GUI();
-      gui.width = 300;
+      var gui = new GUI({ width: 300 });
       gui.add(params, "Mode", ["Free", "Exploratory"])
         .onChange(function (value) {
           switch (value) {
@@ -307,12 +309,12 @@
               break;
           }
         });
-      gui.add(params, "showConstellations")
+      var showConstCtrl = gui.add(params, "showConstellations")
         .name("Show constellations")
         .onChange(function (value) {
           showConstellations(value);
         });
-      gui.add(params, "showDensity")
+      var showDensityCtrl = gui.add(params, "showDensity")
         .name("Show density")
         .onChange(function (value) {
           showDensity(value);
@@ -353,7 +355,7 @@
         },
       };
       gui.add(goToSun, "goToSun").name("Go to Sun");
-      gui.add(params, "Search").onFinishChange(function (value) {
+      var searchCtrl = gui.add(params, "Search").onFinishChange(function (value) {
         var star = starPositions.find((star) => star.name == value);
         if (star == null) {
           var name = starNames.find((obj) => obj.name == value);
@@ -388,13 +390,10 @@
               break;
           }
         });
-      var searchEl = document.querySelector(".c>input[type=text]");
-      var showConstEl = document.evaluate("//li[div[span[text()='Show constellations']]]", document, null, XPathResult.ANY_TYPE, null).iterateNext();
-      showConstEl.classList.add("hidden");
-      var showDensityEl = document.evaluate("//li[div[span[text()='Show density']]]", document, null, XPathResult.ANY_TYPE, null).iterateNext();
-      showDensityEl.classList.add("hidden");
-      var search = document.evaluate("//li[div[span[text()='Search']]]", document, null, XPathResult.ANY_TYPE, null).iterateNext();
-      search.classList.add("hidden");
+      var searchEl = searchCtrl.$input;
+      showConstCtrl.domElement.classList.add("hidden");
+      showDensityCtrl.domElement.classList.add("hidden");
+      searchCtrl.domElement.classList.add("hidden");
       await readColours();
       await readNames();
       await readClusters();
@@ -538,8 +537,8 @@
             case 11:
               showArrow(false);
               clustersStageActive = false;
-              search.classList.remove("hidden");
-              showDensityEl.classList.remove("hidden");
+              searchCtrl.domElement.classList.remove("hidden");
+              showDensityCtrl.domElement.classList.remove("hidden");
               showSmoothMessage(MODE_COMPLETED);
           }
         }
@@ -1169,9 +1168,11 @@
               showMessage(CONS_STAGE + "(" + left + "/10) left");
             } else {
               showMessage(CONS_COMPLETED);
-              showConstEl.classList.remove("hidden");
+              showConstCtrl.domElement.classList.remove("hidden");
               conGameActive = false;
-              showConstEl.click();
+              params.showConstellations = true;
+              showConstCtrl.updateDisplay();
+              showConstellations(true);
               progress++;
               setTimeout(() => {
                 showInfo();
