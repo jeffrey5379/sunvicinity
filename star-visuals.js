@@ -12,14 +12,14 @@ const StarVisualsConfig = {
   haloSize: 1.0, // multiplier for halo spread (0.1 = tight, 2.0 = very wide)
   haloAmount: 0.4, // halo brightness (0 = no halo, 1 = very bright)
   haloFadeBelow: 2.0, // ly — halo fades out smoothly at camera distance <= this value
-  haloFadeAbove: 50.0, // ly — halo fades out smoothly at camera distance >= this value
+  haloFadeAbove: 80.0, // ly — halo fades out smoothly at camera distance >= this value
 
   // ── Core ────────────────────────────────────────────────────────────────────
   coreWidth: 0.2, // multiplier for Moffat PSF core radius (0.5 = sharp, 3.0 = bloated)
 
   // ── Diffraction spikes ──────────────────────────────────────────────────────
-  spikeLength: 0.01, // spike length scale (0 = no spikes, 1.0 = very long)
-  spikeWidth: 0.5, // spike width multiplier (0.5 = razor thin, 4.0 = wide)
+  spikeLength: 0.02, // spike length scale (0 = no spikes, 1.0 = very long)
+  spikeWidth: 0.3, // spike width multiplier (0.5 = razor thin, 4.0 = wide)
   spikeAngle: 0.0, // rotation in degrees (0 = H+V, 45 = diagonal X)
   spikeFadeBelow: 5.0, // ly — spikes fade out smoothly at camera distance <= this value
 
@@ -33,8 +33,8 @@ const StarVisualsConfig = {
     A: { r: 0.84, g: 0.88, b: 1.0, glowMaxDist: 80.0 }, // white-blue
     F: { r: 0.98, g: 0.96, b: 1.0, glowMaxDist: 60.0 }, // yellow-white
     G: { r: 1.0, g: 0.93, b: 0.78, glowMaxDist: 50.0 }, // solar yellow
-    K: { r: 0.1, g: 0.9, b: 0.1, glowMaxDist: 50.0 }, // orange
-    M: { r: 1.0, g: 0.35, b: 0.15, glowMaxDist: 20.0 }, // red dwarf — no glow
+    K: { r: 0.8, g: 0.4, b: 0.1, glowMaxDist: 50.0 }, // orange
+    M: { r: 1.0, g: 0.35, b: 0.15, glowMaxDist: 10.0 }, // red dwarf — no glow
     C: { r: 0.9, g: 0.25, b: 0.08, noGlow: true }, // carbon star — no glow
     L: { r: 0.8, g: 0.2, b: 0.05, noGlow: true }, // brown dwarf — no glow
     T: { r: 0.7, g: 0.15, b: 0.05, noGlow: true }, // T-dwarf — no glow
