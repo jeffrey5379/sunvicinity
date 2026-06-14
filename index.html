@@ -3,6 +3,7 @@
   <head>
     <title>Sun stellar neighborhood Nearby stars 3D</title>
     <meta charset="utf-8" />
+    <meta name="google-site-verification" content="L2TO0LKi7qE33MuWl0hPqfPLGe2LNONO0HjmvNfSJWk" />
     <meta
       name="viewport"
       content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0"
@@ -52,7 +53,7 @@
       import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
       import { createNebula, updateNebula } from "./star-nebula.js";
       window.THREE = THREE;
-      THREE.ColorManagement.enabled = false;
+      //THREE.ColorManagement.enabled = false;
       
       const WELCOME_MESSAGE = "Welcome to the vicinity of the Sun. Switch to exploratory mode to study the mechanics of the model or navigate between stars in free mode.";
       const FEEDBACK_MESSAGE = "Your feedback is always welcome: jeffrey3829@proton.me";
@@ -132,8 +133,7 @@
         starPositions = [];
       var white = 0xffffff,
         turquoise = 0x1996af,
-        darkTurquoise = 0x082A30,
-        gray = 0x161616,
+        gray = 0x505050,
         red = 0xff0000,
         orange = 0xcc6600,
         yellow = 0xffff00;
@@ -173,10 +173,6 @@
         new Promise((resolve, reject) => {
           setTimeout((_) => resolve(), millis);
         });
-      var loader = new FontLoader();
-      loader.load("urbanist_bold.json", function (kdp) {
-        mainFont = kdp;
-      });
       var params = {
         exposure: exposure,
         bloomStrength: 6,
@@ -205,7 +201,7 @@
       camera.position.set(0, 0, 3);
       camera.lookAt(0, 0, 0);
       controls = new OrbitControls(camera, renderer.domElement);
-      controls.minDistance = 0.5;
+      controls.minDistance = 0.2;
       controls.maxDistance = 50000.0;
       controls.enableKeys = false;
       controls.enablePan = false;
@@ -295,6 +291,70 @@
           }
         }
       });
+      
+      function setupCustomDropdowns(gui) {
+        var openDropdown = null;
+
+        document.addEventListener('pointerdown', function(e) {
+          if (openDropdown && !openDropdown.contains(e.target)) {
+            openDropdown.remove();
+            openDropdown = null;
+          }
+        });
+
+        gui.controllersRecursive().forEach(function(controller) {
+          if (!controller.$select) return;
+          controller.$select.addEventListener('pointerdown', function(e) { e.stopPropagation(); });
+          controller.$select.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (openDropdown) {
+              openDropdown.remove();
+              openDropdown = null;
+              return;
+            }
+            var cs = getComputedStyle(gui.domElement);
+            var rect = controller.$widget.getBoundingClientRect();
+            openDropdown = document.createElement('div');
+            openDropdown.style.cssText =
+              'position:fixed;z-index:10000;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.5);' +
+              'left:' + rect.left + 'px;top:' + rect.bottom + 'px;width:' + rect.width + 'px;' +
+              'background:' + cs.getPropertyValue('--widget-color').trim() + ';' +
+              'border-radius:' + cs.getPropertyValue('--widget-border-radius').trim() + ';' +
+              'font-family:' + cs.getPropertyValue('--font-family').trim() + ';' +
+              'font-size:' + cs.getPropertyValue('--font-size').trim() + ';' +
+              'color:' + cs.getPropertyValue('--text-color').trim() + ';';
+            Array.from(controller.$select.options).forEach(function(opt) {
+              var item = document.createElement('div');
+              item.textContent = opt.text;
+              var isSelected = opt.value === controller.$select.value;
+              var bgNormal = isSelected
+                ? cs.getPropertyValue('--focus-color').trim()
+                : cs.getPropertyValue('--widget-color').trim();
+              item.style.cssText =
+                'padding:0 .55em;cursor:pointer;' +
+                'height:' + cs.getPropertyValue('--widget-height').trim() + ';' +
+                'line-height:' + cs.getPropertyValue('--widget-height').trim() + ';' +
+                'background:' + bgNormal + ';';
+              item.addEventListener('mouseenter', function() {
+                item.style.background = cs.getPropertyValue('--hover-color').trim();
+              });
+              item.addEventListener('mouseleave', function() {
+                item.style.background = bgNormal;
+              });
+              item.addEventListener('pointerdown', function(e) {
+                e.stopPropagation();
+                controller.setValue(opt.value);
+                openDropdown.remove();
+                openDropdown = null;
+              });
+              openDropdown.appendChild(item);
+            });
+            document.body.appendChild(openDropdown);
+          });
+        });
+      }
+
       var gui = new GUI({ width: 300 });
       gui.add(params, "Mode", ["Free", "Exploratory"])
         .onChange(function (value) {
@@ -391,10 +451,12 @@
               break;
           }
         });
+      setupCustomDropdowns(gui);
       var searchEl = searchCtrl.$input;
       showConstCtrl.domElement.classList.add("hidden");
       showDensityCtrl.domElement.classList.add("hidden");
       searchCtrl.domElement.classList.add("hidden");
+      mainFont = await new FontLoader().loadAsync("urbanist_bold.json");
       await readColours();
       await readNames();
       await readClusters();
@@ -409,6 +471,7 @@
         return true;
       });
       naj();
+      
       function naj() {
         setTimeout(function () {
           requestAnimationFrame(naj);
@@ -554,7 +617,7 @@
           var arrowGroup = new THREE.Group();
 
           var mat = new THREE.MeshPhongMaterial({
-            color: darkTurquoise,
+            color: turquoise,
             specular: 0x333333,
             shininess: 0,
             emissive: 0x000000,
@@ -651,11 +714,10 @@
           var nearest = findNearestStarByScreenPos(mouse, 3);
           if (nearest) intersects = [{ object: nearest}];
         }
-        var isAllConlines = intersects.length > 0 && intersects.every((obj) => obj.object.apptype == APPTYPE.CONLINE);
         if (intersects.length > 1 && intersects[0].object.position.distanceTo(camera.position) < 0.1) {
           object = intersects[1].object;
         }
-        if (conGameActive && (intersects.length == 0 || isAllConlines)) {
+        if (conGameActive && intersects.length == 0) {
           intersects = raycaster.intersectObjects(conLabelLines);
         }
         if (clustersStageActive && intersects.length == 0) {
@@ -666,16 +728,6 @@
           if (object == undefined) {
             object = intersects[0].object;
           }
-          if ((object.position.distanceTo(camera.position) < 0.3 || object.apptype == APPTYPE.CONLINE) && intersects.length > 1) {
-            for (var i = 1; i < intersects.length; i++) {
-              if (object.apptype == APPTYPE.CONLINE) {
-                object = intersects[i].object;
-              } else {
-                break;
-              }
-            }
-          }
-          if (object == undefined || object.apptype == APPTYPE.CONLINE || object.apptype == APPTYPE.BLACK_HOLE) return;
           currentStep = 0;
           if (object.type === "Line" && object.parent.apptype == APPTYPE.CONLABEL && conGameActive) {
             object.material.color.setHex(turquoise);
