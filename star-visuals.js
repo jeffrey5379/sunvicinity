@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { lumClassMult } from "./star-utils.js";
 
 // ══════════════════════════════════════════════════════════════════════════════
 //  PARAMETERS — edit these to tune the visual appearance
@@ -33,7 +34,7 @@ const StarVisualsConfig = {
     A: { r: 0.84, g: 0.88, b: 1.0, glowMaxDist: 80.0 }, // white-blue
     F: { r: 0.98, g: 0.96, b: 1.0, glowMaxDist: 60.0 }, // yellow-white
     G: { r: 1.0, g: 0.93, b: 0.78, glowMaxDist: 50.0 }, // solar yellow
-    K: { r: 0.8, g: 0.4, b: 0.1, glowMaxDist: 50.0 }, // orange
+    K: { r: 0.8, g: 0.5, b: 0.2, glowMaxDist: 50.0 }, // orange
     M: { r: 1.0, g: 0.35, b: 0.15, glowMaxDist: 10.0 }, // red dwarf — no glow
     C: { r: 0.9, g: 0.25, b: 0.08, noGlow: true }, // carbon star — no glow
     L: { r: 0.8, g: 0.2, b: 0.05, noGlow: true }, // brown dwarf — no glow
@@ -254,20 +255,6 @@ const StarVisuals = (() => {
   `;
   }
 
-  // Returns a brightness multiplier based on the luminosity class encoded in the
-  // full spectral type string (e.g. "M1-M2Ia-Iab", "K5III", "A1V").
-  // Ia supergiants are ~5× brighter visually than main-sequence stars of the
-  // same spectral letter; giants (III) are ~1.8×.
-  function _lumClassMult(spectralType) {
-    if (!spectralType) return 1.0;
-    if (/Ia/.test(spectralType)) return 2.0; // supergiants (Ia, Iab)
-    if (/Ib/.test(spectralType)) return 1.8; // bright supergiants
-    if (/II[^I]|II$/.test(spectralType)) return 1.6; // bright giants (II not III)
-    if (/III/.test(spectralType)) return 1.4; // giants
-    if (/IV/.test(spectralType)) return 1.2; // subgiants
-    return 1.0; // V / VI / unknown
-  }
-
   // ── Build ONE Points object from all star meshes ──────────────────────────────
   function build(starMeshes) {
     if (_points) {
@@ -289,7 +276,7 @@ const StarVisuals = (() => {
       const rawBright = Math.pow(sc / 0.04, 0.5);
 
       const spectralClass = mesh.spectralClass || "";
-      const lumMult = _lumClassMult(mesh.spectralType || "");
+      const lumMult = lumClassMult(mesh.spectralType || "");
       const isGiant = lumMult > 1.0; // true for giants and supergiants
 
       // Spectral class brightness multiplier, boosted by luminosity class
