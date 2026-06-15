@@ -9,6 +9,7 @@
       content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0"
     />
     <link type="text/css" rel="stylesheet" href="main.css" />
+    <link rel="icon" href="favicon.ico" />
   </head>
 
   <body>
@@ -52,6 +53,7 @@
       import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
       import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
       import { createNebula, updateNebula } from "./star-nebula.js";
+      import { plxToLy, degreesToRad } from "./star-utils.js";
       window.THREE = THREE;
       
       const WELCOME_MESSAGE = "Welcome to the vicinity of the Sun. Switch to exploratory mode to study the mechanics of the model or navigate between stars in free mode.";
@@ -1187,14 +1189,6 @@
         second.position.copy(position);
         first.lookAt(0.0, 0.0, 0.0);
         second.lookAt(0.0, 0.0, 0.0);
-      }
-      
-      function plxToLy(plx) {
-        return 3261.56 / plx;
-      }
-      
-      function degreesToRad(degrees) {
-        return (degrees * Math.PI) / 180.0;
       }
       
       function disposeMaterial(obj) {
