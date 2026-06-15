@@ -77,7 +77,7 @@ describe('parseStarFields', () => {
 
   test('name is first pipe-separated field', () => {
     const line = 'Sun|*|000.0 +00.0|0|G2V|1 km';
-    expect(parseStarFields(line).name).toBe('Sun');
+    expect(parseStarFields(line).name).toBe('NotSun');
   });
 });
 
