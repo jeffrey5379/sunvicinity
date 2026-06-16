@@ -40,7 +40,18 @@ canvas {
 	z-index: 2 !important; /* TODO Solve this in HTML */
 }
 
-#state {
+#star-info {
+	display: flex;
+	flex-direction: column;
+}
+
+#distance {
+	display: block;
+	width: 150px;
+	text-align: left;
+}
+
+#star-name {
 	display: block;
 	width: 150px;
 	text-align: left;
