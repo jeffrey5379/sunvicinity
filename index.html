@@ -14,7 +14,10 @@
 
   <body>
     <div id="header">
-      <span id="state"></span>
+      <div id="star-info">
+        <span id="distance"></span>
+        <span id="star-name"></span>
+      </div>
       <span id="info">Loading... Please wait</span>
     </div>
 
@@ -54,6 +57,7 @@
       import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
       import { createNebula, updateNebula } from "./star-nebula.js";
       import { plxToLy, degreesToRad } from "./star-utils.js";
+      import { BlackHole, BlackHoleConfig } from "./star-blackhole.js";
       window.THREE = THREE;
       
       const WELCOME_MESSAGE = "Welcome to the vicinity of the Sun. Switch to exploratory mode to study the mechanics of the model or navigate between stars in free mode.";
@@ -134,14 +138,14 @@
         starPositions = [];
       var white = 0xffffff,
         turquoise = 0x1996af,
-        gray = 0x505050,
+        gray = 0x454545,
         red = 0xff0000,
         orange = 0xcc6600,
         yellow = 0xffff00;
       var conGameActive = false,
         clustersStageActive = false,
         constBefore, chosenCon, pairCon, arrow, actualMessage,
-        foundStar, activeStar, activeCluster, sun;
+        foundStar, activeStar, activeCluster, sun, bh;
       var chosenConSteps = [],
         pairConSteps = [],
         starColours = [],
@@ -194,7 +198,7 @@
       renderer.toneMappingExposure = exposure;
       renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
       document.body.appendChild(renderer.domElement);
-      const state = document.getElementById("state");
+      const starName = document.getElementById("star-name");
       const info = document.getElementById("info");
       var tempMessage, oldText;
       scene = new THREE.Scene();
@@ -417,6 +421,16 @@
         },
       };
       gui.add(goToSun, "goToSun").name("Go to Sun");
+
+      var goToSagA = {
+        goToSagA: function () {
+          if (controls.position != bh.position) {
+            recenter(bh);
+          }
+        }
+      };
+      var goToSagACtrl = gui.add(goToSagA, "goToSagA").name("Go to Sagittarius A*");
+
       var searchCtrl = gui.add(params, "Search").onFinishChange(function (value) {
         var star = starPositions.find((star) => star.name == value);
         if (star == null) {
@@ -434,6 +448,7 @@
         }
         this.setValue("");
       });
+
       gui.add(params, "Info", ["None", "About", "Feedback"])
         .onChange(function (value) {
           switch (value) {
@@ -457,6 +472,7 @@
       showConstCtrl.domElement.classList.add("hidden");
       showDensityCtrl.domElement.classList.add("hidden");
       searchCtrl.domElement.classList.add("hidden");
+      goToSagACtrl.domElement.classList.add("hidden");
       mainFont = await new FontLoader().loadAsync("urbanist_bold.json");
       await readColours();
       await readNames();
@@ -562,10 +578,10 @@
         if (intersects.length > 0 && !animation && intersects[0].object.text != undefined) {
           var object = intersects[0].object;
           if (object != activeStar) {
-            showState(object.name);
+            showStarName(object.name);
           }
         } else {
-          showState("");
+          showStarName("");
         }
       }
       
@@ -608,6 +624,7 @@
               clustersStageActive = false;
               searchCtrl.domElement.classList.remove("hidden");
               showDensityCtrl.domElement.classList.remove("hidden");
+              goToSagACtrl.domElement.classList.remove("hidden");
               showSmoothMessage(MODE_COMPLETED);
           }
         }
@@ -696,7 +713,7 @@
       function onDocumentMouseDown(event) {
         mouseDownX = event.clientX;
         mouseDownY = event.clientY;
-        showState("");
+        showStarName("");
       }
 
       async function onDocumentMouseUp(event) {
@@ -976,13 +993,11 @@
       }
       
       function showGalaxyCenter() {
-        var sagAMaterial = new THREE.MeshBasicMaterial({ color: 0x100500 });
-        var sagA = new THREE.Mesh(starGeometry, sagAMaterial);
-        sagA.position.setFromSphericalCoords(26000, 2.07, 4.64);
-        sagA.scale.setScalar(50.0);
-        sagA.name = "Sagittarius A*";
-        sagA.apptype = APPTYPE.BLACK_HOLE;
-        scene.add(sagA);
+        var pos = new THREE.Vector3().setFromSphericalCoords(26996, 2.077078, 4.649851);
+        bh = BlackHole.create(scene, pos, 0.1);
+        bh.name = "Sagittarius A*";
+        bh.apptype = APPTYPE.BLACK_HOLE;
+        scene.add(bh);
       }
       
       function constellationStar(starName) {
@@ -1080,8 +1095,8 @@
         }
       }
       
-      function showState(message) {
-        state.innerText = message;
+      function showStarName(message) {
+        starName.innerText = message;
       }
       
       function showLabel(sphere, show) {
@@ -1199,6 +1214,7 @@
       
       function render() {
         StarVisuals.update();
+        BlackHole.update(camera);
         if (animation == ANIMATION.RECENTER) {
           var move = new THREE.Vector3(xSteps[currentStep], ySteps[currentStep], zSteps[currentStep]);
           currentStep++;
@@ -1302,6 +1318,10 @@
         }
         updateNebula(camera);
         adjustStars();
+        if (sun) {
+          var lyDist = controls.target.distanceTo(sun.position).toFixed();
+          document.getElementById("distance").textContent = lyDist == 0 ? "" : (lyDist < 10000 ? (lyDist + " ly") : ((lyDist/1000).toFixed() + " Kly")) + " from the Sun";
+        }
         renderBloom();
         finalComposer.render();
       }
