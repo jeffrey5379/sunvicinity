@@ -5,7 +5,7 @@ import {
   parseStarFields,
   getSpectralClass,
   lumClassMult,
-} from '../star-utils.js';
+} from '../utils.js';
 
 // ── plxToLy ───────────────────────────────────────────────────────────────────
 describe('plxToLy', () => {

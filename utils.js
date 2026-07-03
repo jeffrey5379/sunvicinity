@@ -1,5 +1,5 @@
 // Pure utility functions — no Three.js or DOM dependencies.
-// Imported by star-visuals.js and index.html; tested by tests/star-utils.test.js.
+// Imported by visuals.js and index.html; tested by tests/utils.test.js.
 
 export function plxToLy(plx) {
   return 3261.56 / plx;
