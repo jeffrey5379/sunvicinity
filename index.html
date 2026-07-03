@@ -21,43 +21,17 @@
       <span id="info">Loading... Please wait</span>
     </div>
 
-    <script src="star-agent.js"></script>
-    <script src="star-visuals.js" type="module"></script>
-
-    <script type="x-shader/x-vertex" id="vertexshader">
-      varying vec2 vUv;
-      void main() {
-      	vUv = uv;
-      	gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
-      }
-    </script>
-
-    <script type="x-shader/x-fragment" id="fragmentshader">
-      uniform sampler2D baseTexture;
-      uniform sampler2D bloomTexture;
-      varying vec2 vUv;
-
-      vec4 getTexture( sampler2D texelToLinearTexture ) {
-      	return texture2D( texelToLinearTexture , vUv );
-      }
-
-      void main() {
-      	gl_FragColor = ( getTexture( baseTexture ) + vec4( 1.0 ) * getTexture( bloomTexture ) );
-      }
-    </script>
+    <script src="agent.js"></script>
+    <script src="visuals.js" type="module"></script>
 
     <script type="module">
       import * as THREE from "three";
-      import GUI from "three/examples/jsm/libs/lil-gui.module.min.js";
-      import { FontLoader } from "three/examples/jsm/loaders/FontLoader.js";
-      import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-      import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
-      import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
-      import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
-      import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
-      import { createNebula, updateNebula } from "./star-nebula.js";
-      import { plxToLy, degreesToRad } from "./star-utils.js";
-      import { BlackHole, BlackHoleConfig } from "./star-blackhole.js";
+      import GUI from "three/addons/libs/lil-gui.module.min.js";
+      import { FontLoader } from "three/addons/loaders/FontLoader.js";
+      import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+      import { createNebula, updateNebula } from "./nebula.js";
+      import { plxToLy, degreesToRad } from "./utils.js";
+      import { BlackHole, BlackHoleConfig } from "./blackhole.js";
       window.THREE = THREE;
       
       const WELCOME_MESSAGE = "Welcome to the vicinity of the Sun. Switch to exploratory mode to study the mechanics of the model or navigate between stars in free mode.";
@@ -116,6 +90,12 @@
         BLACK_HOLE: "BLACK_HOLE",
       };
       const ANIMATION = { RECENTER: "RECENTER", CONS_SWAP: "CONS_SWAP", CLUSTER_ONE: "CLUSTER_ONE", CLUSTER_TWO: "CLUSTER_TWO" };
+      const animationHandlers = {
+        [ANIMATION.RECENTER]:    tickRecenter,
+        [ANIMATION.CONS_SWAP]:   tickConsSwap,
+        [ANIMATION.CLUSTER_ONE]: tickClusterOne,
+        [ANIMATION.CLUSTER_TWO]: tickClusterTwo,
+      };
       var scene, camera, controls, renderer;
       const SUN_DIAMETER = 1391400,
         DEFAULT_RADIUS = 0.005;
@@ -137,8 +117,8 @@
         clusterLabelLines = [],
         starPositions = [];
       var white = 0xffffff,
-        turquoise = 0x1996af,
-        gray = 0x454545,
+        turquoise = 0x2b8ea6,
+        gray = 0x404040,
         red = 0xff0000,
         orange = 0xcc6600,
         yellow = 0xffff00;
@@ -162,6 +142,7 @@
       var progress = 0,
         SMOOTH_MESSAGE_TIMEOUT = 30,
         mouseDownX, mouseDownY;
+      var recenterTarget = null;
       var xSteps = [],
         ySteps = [],
         zSteps = [],
@@ -180,17 +161,12 @@
         });
       var params = {
         exposure: exposure,
-        bloomStrength: 6,
-        bloomThreshold: 0,
-        bloomRadius: 1,
         Mode: "Free",
         showConstellations: false,
         showDensity: false,
         Info: "None",
         Search: "",
       };
-      var darkMaterial = new THREE.MeshBasicMaterial({ color: "black" });
-      var materials = {};
       renderer = new THREE.WebGLRenderer({ antialias: false });
       renderer.setPixelRatio(window.devicePixelRatio);
       renderer.setSize(window.innerWidth, window.innerHeight);
@@ -211,31 +187,6 @@
       controls.enableKeys = false;
       controls.enablePan = false;
       controls.addEventListener("change", render);
-      var renderScene = new RenderPass(scene, camera);
-      var bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-      bloomPass.threshold = params.bloomThreshold;
-      bloomPass.strength = params.bloomStrength;
-      bloomPass.radius = params.bloomRadius;
-      var composer = new EffectComposer(renderer);
-      composer.renderToScreen = false;
-      composer.addPass(renderScene);
-      composer.addPass(bloomPass);
-      var shaderPass = new ShaderPass(
-        new THREE.ShaderMaterial({
-          uniforms: {
-            baseTexture: { value: null },
-            bloomTexture: { value: composer.renderTarget2.texture },
-          },
-          vertexShader: document.getElementById("vertexshader").textContent,
-          fragmentShader: document.getElementById("fragmentshader").textContent,
-          defines: {},
-        }),
-        "baseTexture"
-      );
-      shaderPass.needsSwap = true;
-      var finalComposer = new EffectComposer(renderer);
-      finalComposer.addPass(renderScene);
-      finalComposer.addPass(shaderPass);
       var raycaster = new THREE.Raycaster(),
         mouse = new THREE.Vector2();
       window.addEventListener("pointerup", onDocumentMouseUp, false);
@@ -487,14 +438,15 @@
         recenter(star);
         return true;
       });
-      naj();
-      
-      function naj() {
-        setTimeout(function () {
-          requestAnimationFrame(naj);
-        }, 15);
+      let _lastFrameTime = 0;
+
+      function limitFrames(time) {
+        requestAnimationFrame(limitFrames);
+        if (time - _lastFrameTime < 15) return;
+        _lastFrameTime = time;
         render();
       }
+      requestAnimationFrame(limitFrames);
       
       function getColorBySpectralType(spectralType) {
         for (let colour of starColours) {
@@ -859,13 +811,13 @@
         camera.aspect = width / height;
         camera.updateProjectionMatrix();
         renderer.setSize(width, height);
-        composer.setSize(width, height);
-        finalComposer.setSize(width, height);
         render();
       };
       
       function recenter(object) {
+        currentStep = 0;
         animation = ANIMATION.RECENTER;
+        recenterTarget = object.position.clone();
         if (activeStar != undefined) {
           showLabel(activeStar, false);
         }
@@ -1212,106 +1164,116 @@
         }
       }
       
-      function render() {
-        StarVisuals.update();
-        BlackHole.update(camera);
-        if (animation == ANIMATION.RECENTER) {
-          var move = new THREE.Vector3(xSteps[currentStep], ySteps[currentStep], zSteps[currentStep]);
-          currentStep++;
-          camera.position.add(move);
-          controls.target.add(move);
-          camera.lookAt(controls.target);
-          if (currentStep >= animationSteps) {
-            animation = null;
-            updateScene(activeStar.position, false);
-            clearScene();
-            currentStep = 0;
-            if (params.Mode == EXPLORATORY_MODE && activeStar.name == STARS_TO_VISIT[progress - 1]) {
-              showSmoothMessage("Well done! " + STARS_INFO[progress - 1]);
-              var audio = new Audio("./files/paz.mp3");
-              audio.volume = 0.5;
-              audio.play();
-              setTimeout(() => {
-                progress++;
-                showInfo();
-              }, 15000);
-            }
+      function tickRecenter() {
+        var move = new THREE.Vector3(xSteps[currentStep], ySteps[currentStep], zSteps[currentStep]);
+        currentStep++;
+        camera.position.add(move);
+        controls.target.add(move);
+        camera.lookAt(controls.target);
+        if (currentStep >= animationSteps) {
+          animation = null;
+          if (recenterTarget) {
+            var snap = new THREE.Vector3().subVectors(recenterTarget, controls.target);
+            camera.position.add(snap);
+            controls.target.copy(recenterTarget);
+            recenterTarget = null;
           }
-        }
-        if (animation == ANIMATION.CONS_SWAP) {
-          chosenCon.position.copy(chosenConSteps[animationSteps - currentStep]);
-          pairCon.position.copy(pairConSteps[currentStep]);
-          currentStep++;
-          chosenCon.lookAt(sun.position);
-          pairCon.lookAt(sun.position);
-          if (currentStep >= animationSteps) {
-            animation = null;
-            chosenCon.children[0].material.color.setHex(white);
-            pairCon.children[0].material.color.setHex(white);
-            pairCon.conGroup = null;
-            chosenCon.conGroup = null;
-            chosenCon = null;
-            pairCon = null;
-            var left = consLeft();
-            if (left > 0) {
-              showMessage(CONS_STAGE + "(" + left + "/10) left");
-            } else {
-              showMessage(CONS_COMPLETED);
-              showConstCtrl.domElement.classList.remove("hidden");
-              conGameActive = false;
-              params.showConstellations = true;
-              showConstCtrl.updateDisplay();
-              showConstellations(true);
-              progress++;
-              setTimeout(() => {
-                showInfo();
-              }, 10000);
-            }
-          }
-        }
-        if (animation == ANIMATION.CLUSTER_ONE) {
-          if (activeStar != undefined) {
-            showLabel(activeStar, false);
-          }
-          
-          var cameramove = new THREE.Vector3(cameraXsteps[currentStep], cameraYsteps[currentStep], cameraZsteps[currentStep]),
-            targetmove = new THREE.Vector3(targetXsteps[currentStep], targetYsteps[currentStep], targetZsteps[currentStep]);
-          currentStep++;
-          camera.position.add(cameramove);
-          controls.target.add(targetmove);
-          camera.lookAt(controls.target);
-          if (currentStep >= animationSteps) {
-            animation = ANIMATION.CLUSTER_TWO;
-            currentStep = 1;
-            var audio = new Audio("./files/ekm.mp3");
+          updateScene(activeStar.position, false);
+          clearScene();
+          currentStep = 0;
+          if (params.Mode == EXPLORATORY_MODE && activeStar.name == STARS_TO_VISIT[progress - 1]) {
+            showSmoothMessage("Well done! " + STARS_INFO[progress - 1]);
+            var audio = new Audio("./files/paz.mp3");
             audio.volume = 0.5;
             audio.play();
-            if (params.Mode == EXPLORATORY_MODE && activeCluster.name == CLUSTERS_TO_VISIT[progress - 6]) {
-              showSmoothMessage("Well done! " + CLUSTERS_INFO[progress - 6]);
-              setTimeout(() => {
-                progress++;
-                showInfo();
-              }, 26000);
-            }
+            setTimeout(() => {
+              progress++;
+              showInfo();
+            }, 15000);
           }
         }
+      }
 
-        if (animation == ANIMATION.CLUSTER_TWO) {
-          var cameramove = new THREE.Vector3(cameraXstepsTwo[currentStep] - cameraXstepsTwo[currentStep - 1], 0.0, cameraZstepsTwo[currentStep] - cameraZstepsTwo[currentStep - 1]);
-          currentStep++;
-          camera.position.add(cameramove);
-          camera.lookAt(controls.target);
-          if (currentStep >= clusterAnimationSteps) {
+      function tickConsSwap() {
+        chosenCon.position.copy(chosenConSteps[animationSteps - currentStep]);
+        pairCon.position.copy(pairConSteps[currentStep]);
+        currentStep++;
+        chosenCon.lookAt(sun.position);
+        pairCon.lookAt(sun.position);
+        if (currentStep >= animationSteps) {
+          animation = null;
+          chosenCon.children[0].material.color.setHex(white);
+          pairCon.children[0].material.color.setHex(white);
+          pairCon.conGroup = null;
+          chosenCon.conGroup = null;
+          chosenCon = null;
+          pairCon = null;
+          var left = consLeft();
+          if (left > 0) {
+            showMessage(CONS_STAGE + "(" + left + "/10 left)");
+          } else {
+            showMessage(CONS_COMPLETED);
+            showConstCtrl.domElement.classList.remove("hidden");
+            conGameActive = false;
+            params.showConstellations = true;
+            showConstCtrl.updateDisplay();
+            showConstellations(true);
+            progress++;
+            setTimeout(() => {
+              showInfo();
+            }, 10000);
+          }
+        }
+      }
+
+      function tickClusterOne() {
+        if (activeStar != undefined) {
+          showLabel(activeStar, false);
+        }
+        var cameramove = new THREE.Vector3(cameraXsteps[currentStep], cameraYsteps[currentStep], cameraZsteps[currentStep]),
+          targetmove = new THREE.Vector3(targetXsteps[currentStep], targetYsteps[currentStep], targetZsteps[currentStep]);
+        currentStep++;
+        camera.position.add(cameramove);
+        controls.target.add(targetmove);
+        camera.lookAt(controls.target);
+        if (currentStep >= animationSteps) {
+          animation = ANIMATION.CLUSTER_TWO;
+          currentStep = 1;
+          var audio = new Audio("./files/ekm.mp3");
+          audio.volume = 0.5;
+          audio.play();
+          if (params.Mode == EXPLORATORY_MODE && activeCluster.name == CLUSTERS_TO_VISIT[progress - 6]) {
+            showSmoothMessage("Well done! " + CLUSTERS_INFO[progress - 6]);
+            setTimeout(() => {
+              progress++;
+              showInfo();
+            }, 26000);
+          }
+        }
+      }
+
+      function tickClusterTwo() {
+        var cameramove = new THREE.Vector3(cameraXstepsTwo[currentStep] - cameraXstepsTwo[currentStep - 1], 0.0, cameraZstepsTwo[currentStep] - cameraZstepsTwo[currentStep - 1]);
+        currentStep++;
+        camera.position.add(cameramove);
+        camera.lookAt(controls.target);
+        if (currentStep >= clusterAnimationSteps) {
+          if (progress < 11) {
             setTimeout(() => {
               showArrow(true);
             }, 1000);
-            
-            controls.enabled = true;
-            animation = null;
-            currentStep = 0;
-            showConstellations(constBefore);
           }
+          controls.enabled = true;
+          animation = null;
+          currentStep = 0;
+          showConstellations(constBefore);
         }
+      }
+
+      function render() {
+        StarVisuals.update();
+        BlackHole.update(camera);
+        animationHandlers[animation]?.();
         if (arrow != undefined && scene.children.includes(arrow) && clusters[progress - 6]) {
           updateArrowHud();
           arrow.lookAt(clusters[progress - 6].center);
@@ -1322,8 +1284,7 @@
           var lyDist = controls.target.distanceTo(sun.position).toFixed();
           document.getElementById("distance").textContent = lyDist == 0 ? "" : (lyDist < 10000 ? (lyDist + " ly") : ((lyDist/1000).toFixed() + " Kly")) + " from the Sun";
         }
-        renderBloom();
-        finalComposer.render();
+        renderer.render(scene, camera);
       }
 
       function adjustStars() {
@@ -1401,25 +1362,6 @@
         console.log("Scene objects " + scene.children.length);
       }
       
-      function renderBloom() {
-        scene.traverse(darkenNonBloomed);
-        composer.render();
-        scene.traverse(restoreMaterial);
-      }
-      
-      function darkenNonBloomed(obj) {
-        if (!obj.shine) {
-          materials[obj.uuid] = obj.material;
-          obj.material = darkMaterial;
-        }
-      }
-      
-      function restoreMaterial(obj) {
-        if (materials[obj.uuid]) {
-          obj.material = materials[obj.uuid];
-          delete materials[obj.uuid];
-        }
-      }
     </script>
   </body>
 </html>

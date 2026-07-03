@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { lumClassMult } from "./star-utils.js";
+import { lumClassMult } from "./utils.js";
 
 // ══════════════════════════════════════════════════════════════════════════════
 //  PARAMETERS — edit these to tune the visual appearance
@@ -11,8 +11,8 @@ const StarVisualsConfig = {
 
   // ── Halo ────────────────────────────────────────────────────────────────────
   haloSize: 1.0, // multiplier for halo spread (0.1 = tight, 2.0 = very wide)
-  haloAmount: 0.4, // halo brightness (0 = no halo, 1 = very bright)
-  haloFadeBelow: 2.0, // ly — halo fades out smoothly at camera distance <= this value
+  haloAmount: 0.6, // halo brightness (0 = no halo, 1 = very bright)
+  haloFadeBelow: 0.0, // ly — halo fades out smoothly at camera distance <= this value
   haloFadeAbove: 80.0, // ly — halo fades out smoothly at camera distance >= this value
 
   // ── Core ────────────────────────────────────────────────────────────────────
@@ -33,16 +33,16 @@ const StarVisualsConfig = {
     B: { r: 0.67, g: 0.75, b: 1.0, glowMaxDist: 90.0 }, // blue-white
     A: { r: 0.84, g: 0.88, b: 1.0, glowMaxDist: 80.0 }, // white-blue
     F: { r: 0.98, g: 0.96, b: 1.0, glowMaxDist: 60.0 }, // yellow-white
-    G: { r: 1.0, g: 0.93, b: 0.78, glowMaxDist: 50.0 }, // solar yellow
-    K: { r: 0.8, g: 0.5, b: 0.2, glowMaxDist: 50.0 }, // orange
-    M: { r: 1.0, g: 0.35, b: 0.15, glowMaxDist: 10.0 }, // red dwarf — no glow
-    C: { r: 0.9, g: 0.25, b: 0.08, noGlow: true }, // carbon star — no glow
-    L: { r: 0.8, g: 0.2, b: 0.05, noGlow: true }, // brown dwarf — no glow
-    T: { r: 0.7, g: 0.15, b: 0.05, noGlow: true }, // T-dwarf — no glow
-    Y: { r: 0.7, g: 0.15, b: 0.05, noGlow: true }, // Y-dwarf — no glow
+    G: { r: 0.7, g: 0.7, b: 0.0, glowMaxDist: 50.0 }, // solar yellow
+    K: { r: 0.8, g: 0.5, b: 0.0, glowMaxDist: 50.0 }, // orange
+    M: { r: 0.1, g: 0.0, b: 0.0, glowMaxDist: 10.0, useMeshColor: true, noCoreDisk: true }, // red dwarf
+    C: { r: 0.9, g: 0.25, b: 0.08, noGlow: true,   useMeshColor: true, noCoreDisk: true }, // carbon star
+    L: { r: 0.8, g: 0.2,  b: 0.05, noGlow: true,   useMeshColor: true, noCoreDisk: true }, // brown dwarf
+    T: { r: 0.7, g: 0.15, b: 0.05, noGlow: true,   useMeshColor: true, noCoreDisk: true }, // T-dwarf
+    Y: { r: 0.7, g: 0.15, b: 0.05, noGlow: true,   useMeshColor: true, noCoreDisk: true }, // Y-dwarf
     W: { r: 0.71, g: 0.82, b: 1.0 }, // Wolf-Rayet blue
     D: { r: 0.78, g: 0.86, b: 1.0 }, // white dwarf
-    _default: { r: 0.7, g: 0.15, b: 0.05, noGlow: true }, // fallback
+    _default: { r: 0.7, g: 0.15, b: 0.05, noGlow: true, useMeshColor: true, noCoreDisk: true }, // fallback
   },
 
   // ── Brightness by spectral class ────────────────────────────────────────────
@@ -56,7 +56,7 @@ const StarVisualsConfig = {
     F: 1.2, // F-type: yellow-white (Procyon, Canopus)
     G: 1.0, // G-type: solar analog — reference value
     K: 0.8, // K-type: orange stars (Arcturus, Aldebaran)
-    M: 0.5, // M-type: red dwarfs, intrinsically dim
+    M: 0.4, // M-type: red dwarfs, intrinsically dim
     C: 0.2, // C-type: carbon stars
     W: 1.9, // Wolf-Rayet: extremely hot and luminous
     D: 0.6, // White dwarfs: small but hot
@@ -71,6 +71,11 @@ const StarVisuals = (() => {
   let _points = null;
   let _uniforms = null;
   const _lastTargetPos = new THREE.Vector3(Infinity);
+
+  // ── Close-star state ──────────────────────────────────────────────────────────
+  const _glowStarData = [];
+  const _closePool = [];
+  const CLOSE_POOL_SIZE = 16;
 
   // ── Shaders ───────────────────────────────────────────────────────────────────
 
@@ -222,7 +227,7 @@ const StarVisuals = (() => {
       // close up it has a soft photographic spread.
       float caTight = mix(0.03, 1.0, haloFarFade);
       float ca    = (0.04 + b * 0.06) * CORE_WIDTH * caTight;
-      float core  = moffat(r, ca, 2.5);
+      float core  = moffat(r, ca, 2.5); 
       float sat   = smoothstep(0.0, ca * 3.0, r);
       vec3  coreC = mix(vec3(1.0), vColor, sat);
 
@@ -241,10 +246,10 @@ const StarVisuals = (() => {
       col = clamp(col, 0.0, 1.5);
       col = col / (col + 0.6);
 
-      float nearFade    = clamp(vDistFromCam / 1.5, 0.0, 1.0);
+      float nearFade = clamp(vDistFromCam / 1.5, 0.0, 1.0);
       // Per-star glow distance fade: smoothly disappear over a 20 ly band
       float glowDistFade = 1.0 - smoothstep(vGlowMaxDist - 20.0, vGlowMaxDist, vDistFromCam);
-      float alpha    = clamp(
+      float alpha = clamp(
         halo + spikeVal * 0.8 + airy + core * (0.5 + b * 0.7) + punch,
         0.0, 1.0
       ) * vFade * nearFade * glowDistFade;
@@ -255,6 +260,59 @@ const StarVisuals = (() => {
   `;
   }
 
+  // ── Close-star shaders ────────────────────────────────────────────────────────
+
+  const CLOSE_VERT = /* glsl */ `
+    uniform vec3  uStarPos;
+    uniform float uSize;
+    varying vec2  vUv;
+    void main() {
+      vUv = uv - vec2(0.5);
+      vec4 mvPos  = modelViewMatrix * vec4(uStarPos, 1.0);
+      gl_Position = projectionMatrix * (mvPos + vec4(position.xy * uSize, 0.0, 0.0));
+    }
+  `;
+
+  const CLOSE_FRAG = /* glsl */ `
+    precision highp float;
+    uniform vec3  uColor;
+    uniform float uDist;
+    uniform float uBrightness;
+    uniform float uStarRadius;
+    uniform float uDiskAmp;
+    varying vec2  vUv;
+
+    void main() {
+      vec2  p   = vUv;
+      float r   = length(p);
+      if (r > 0.5) discard;
+
+      float fade  = 1.0 - smoothstep(1.5, 5.0, uDist);
+      if (fade < 0.001) discard;
+
+      float diskR   = max(uStarRadius, 0.003 + uBrightness * 0.010);
+      float glowAmp = 0.3 + uBrightness * 0.7;
+      float disk    = uDiskAmp * exp(-r * r / (diskR * diskR));
+      float glow    = uDiskAmp * glowAmp * exp(-r * r / (diskR * 4.0 * diskR * 4.0));
+
+      // M-type stars (uDiskAmp=0): faint corona ring at star edge + soft outer shell
+      float noCore     = 1.0 - uDiskAmp;
+      float dr         = r - uStarRadius * 0.95;
+      float coronaRing = noCore * glowAmp * 3.0 * exp(-dr * dr / (uStarRadius * 0.7 * uStarRadius * 0.7));
+      float outerShell = noCore * glowAmp * 1.5 * exp(-r * r / (diskR * 3.5 * diskR * 3.5));
+
+      // With disk: white-hot center fading to spectral color.
+      // Without disk (M and below): pure spectral color throughout.
+      vec3  withDisk    = mix(vec3(1.0), uColor, smoothstep(0.0, diskR * 1.5, r));
+      vec3  coreColor   = mix(uColor, withDisk, uDiskAmp);
+      vec3  col   = coreColor * (disk + glow) * (0.6 + uBrightness * 0.8)
+                  + uColor * (coronaRing + outerShell) * (0.6 + uBrightness * 0.8);
+      float alpha = clamp((disk + glow + coronaRing + outerShell) * fade, 0.0, 1.0);
+      if (alpha < 0.004) discard;
+      gl_FragColor = vec4(col, alpha);
+    }
+  `;
+
   // ── Build ONE Points object from all star meshes ──────────────────────────────
   function build(starMeshes) {
     if (_points) {
@@ -263,6 +321,8 @@ const StarVisuals = (() => {
       _points.material.dispose();
       _points = null;
     }
+
+    _glowStarData.length = 0;
 
     const positions = [];
     const brightnesses = [];
@@ -310,7 +370,19 @@ const StarVisuals = (() => {
         b = mesh.material.color.b;
       }
 
-      // noGlow: skip this star — unless it's a giant/supergiant (they glow regardless of class)
+      // For M and below: close-up glow uses the actual mesh material color, not the spectral table
+      let closeR = r, closeG = g, closeB = b;
+      if (scEntry && scEntry.useMeshColor && mesh.material && mesh.material.color) {
+        closeR = mesh.material.color.r;
+        closeG = mesh.material.color.g;
+        closeB = mesh.material.color.b;
+      }
+      const noCoreDisk = !!(scEntry && scEntry.noCoreDisk);
+
+      // All stars get the close-up glow billboard
+      _glowStarData.push({ pos: mesh.position.clone(), color: new THREE.Color(closeR, closeG, closeB), brightness, starRadius: sc, noCoreDisk, starMesh: mesh });
+
+      // noGlow: skip this star for the far points/halo system
       if (scEntry && scEntry.noGlow && !isGiant) continue;
 
       positions.push(mesh.position.x, mesh.position.y, mesh.position.z);
@@ -358,6 +430,37 @@ const StarVisuals = (() => {
     _scene.add(_points);
   }
 
+  // ── Close-star billboard pool ─────────────────────────────────────────────────
+  function _buildCloseMesh() {
+    const geo = new THREE.PlaneGeometry(1, 1);
+    for (let i = 0; i < CLOSE_POOL_SIZE; i++) {
+      const uniforms = {
+        uStarPos:    { value: new THREE.Vector3() },
+        uColor:      { value: new THREE.Color(1.0, 0.93, 0.78) },
+        uSize:       { value: 1.0 },
+        uDist:       { value: 999.0 },
+        uBrightness: { value: 0.5 },
+        uStarRadius: { value: 0.0002 },
+        uDiskAmp:    { value: 1.0 },
+      };
+      const mat = new THREE.ShaderMaterial({
+        uniforms,
+        vertexShader: CLOSE_VERT,
+        fragmentShader: CLOSE_FRAG,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        depthTest: false,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.raycast = () => {};
+      mesh.renderOrder = 3;
+      mesh.frustumCulled = false;
+      _scene.add(mesh);
+      _closePool.push({ mesh, uniforms });
+    }
+  }
+
   // ── Per-frame update ──────────────────────────────────────────────────────────
   function update() {
     if (!_uniforms || !_controls) return;
@@ -370,6 +473,32 @@ const StarVisuals = (() => {
     if (_camera) {
       _uniforms.uCamPos.value.copy(_camera.position);
     }
+
+    // Update close-star pool — assign nearest N glow stars to billboard slots
+    if (_camera && _closePool.length > 0 && _glowStarData.length > 0) {
+      const camPos = _camera.position;
+      const nearby = _glowStarData
+        .map(sd => ({ sd, d: camPos.distanceTo(sd.pos) }))
+        .filter(x => x.d < 5.0)
+        .sort((a, b) => a.d - b.d)
+        .slice(0, CLOSE_POOL_SIZE);
+
+      for (let i = 0; i < CLOSE_POOL_SIZE; i++) {
+        const slot = _closePool[i];
+        if (i < nearby.length) {
+          const { sd, d } = nearby[i];
+          slot.uniforms.uStarPos.value.copy(sd.pos);
+          slot.uniforms.uColor.value.copy(sd.color);
+          slot.uniforms.uDist.value = d;
+          slot.uniforms.uSize.value = 1.0;
+          slot.uniforms.uBrightness.value = sd.brightness;
+          slot.uniforms.uStarRadius.value = sd.starMesh ? sd.starMesh.scale.x : sd.starRadius;
+          slot.uniforms.uDiskAmp.value    = sd.noCoreDisk ? 0.0 : 1.0;
+        } else {
+          slot.uniforms.uDist.value = 999.0;
+        }
+      }
+    }
   }
 
   // ── Public API ────────────────────────────────────────────────────────────────
@@ -378,6 +507,7 @@ const StarVisuals = (() => {
     _camera = camera;
     _controls = controls || null;
     build(stars);
+    _buildCloseMesh();
   }
 
   function rebuild(stars) {

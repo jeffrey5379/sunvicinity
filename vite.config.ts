@@ -10,7 +10,7 @@ export default defineConfig(({ command }) => ({
     {
       name: 'copy-static-assets',
       closeBundle() {
-        copyFileSync('star-agent.js', 'dist/star-agent.js');
+        copyFileSync('agent.js', 'dist/agent.js');
         cpSync('files', 'dist/files', { recursive: true });
       },
     },
