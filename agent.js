@@ -1,7 +1,6 @@
 const StarAgent = (() => {
   // ─── State ───────────────────────────────────────────────────────────────────
-  let _scene, _camera, _controls, _stars, _names;
-  let _highlights = [];
+  let _controls, _stars, _names;
   let _navigator = null; // set via setNavigator() — wraps index.html's recenter()
   let _activeStar = null; // SIMBAD id of the star currently in focus (set by click or navigate)
   const _conversationHistory = [];
@@ -74,32 +73,6 @@ const StarAgent = (() => {
         },
         required: ["spectral_prefix"],
       },
-    },
-    {
-      name: "highlight_stars",
-      description:
-        "Highlights a group of stars on the 3D scene with a glowing wireframe halo. Use to visually demonstrate search results.",
-      input_schema: {
-        type: "object",
-        properties: {
-          star_names: {
-            type: "array",
-            items: { type: "string" },
-            description: "Array of SIMBAD IDs of stars to highlight",
-          },
-          color: {
-            type: "string",
-            description:
-              'Color: "cyan", "orange", "green", "red", "yellow", "purple"',
-          },
-        },
-        required: ["star_names", "color"],
-      },
-    },
-    {
-      name: "clear_highlights",
-      description: "Removes all highlight halos from the scene.",
-      input_schema: { type: "object", properties: {} },
     },
     {
       name: "get_current_position",
@@ -195,7 +168,7 @@ const StarAgent = (() => {
 
       appendMessage(
         "agent",
-        `🚀 Flying to **${star.secondName || star.name}**...`,
+        `🚀✨ Setting course for **${star.secondName || star.name}**! Hold on...`,
       );
       _navigator(star.name);
       _activeStar = star.name;
@@ -268,65 +241,6 @@ const StarAgent = (() => {
       return { spectral_prefix, count: results.length, stars: results };
     },
 
-    highlight_stars: async ({ star_names, color }) => {
-      // Remove previous highlights
-      _highlights.forEach((h) => _scene.remove(h));
-      _highlights = [];
-
-      const colorMap = {
-        cyan: 0x00ffff,
-        orange: 0xff8800,
-        green: 0x00ff88,
-        red: 0xff3333,
-        yellow: 0xffff00,
-        purple: 0xcc44ff,
-      };
-      const hex = colorMap[color] || 0x00ffff;
-
-      let found = 0;
-      for (const name of star_names) {
-        const star = findStar(name);
-        if (!star || !star.position) continue;
-
-        // Create a pulsing wireframe halo sphere
-        const geo = new THREE.SphereGeometry(0.8, 8, 8);
-        const mat = new THREE.MeshBasicMaterial({
-          color: hex,
-          transparent: true,
-          opacity: 0.25,
-          wireframe: true,
-        });
-        const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.copy(star.position);
-        mesh.isHighlight = true;
-        _scene.add(mesh);
-        _highlights.push(mesh);
-        found++;
-      }
-
-      // Pulse animation
-      if (_highlights.length > 0) {
-        let t = 0;
-        const pulse = () => {
-          if (_highlights.length === 0) return;
-          t += 0.05;
-          _highlights.forEach((h) => {
-            h.material.opacity = 0.15 + 0.15 * Math.sin(t);
-          });
-          requestAnimationFrame(pulse);
-        };
-        pulse();
-      }
-
-      return { highlighted: found, color };
-    },
-
-    clear_highlights: async () => {
-      _highlights.forEach((h) => _scene.remove(h));
-      _highlights = [];
-      return { success: true };
-    },
-
     get_current_position: async () => {
       const pos = _controls.target;
       const nearby = _stars
@@ -374,7 +288,7 @@ const StarAgent = (() => {
         return { error: "None of the listed stars were found in the dataset" };
       if (!_navigator) return { error: "Scene navigator not available" };
 
-      appendMessage("agent", `🗺 Starting tour of ${found.length} stars...`);
+      appendMessage("agent", `Excellent! I'll guide you through ${found.length} stellar destinations. Buckle up!`);
       // 3000ms matches recenter's animation (200 steps × ~15ms render interval)
       const FLIGHT_MS = 3000;
 
@@ -382,7 +296,7 @@ const StarAgent = (() => {
         if (!star.position) continue;
         appendMessage(
           "agent",
-          `➡ **${star.secondName || star.name}** (${Math.round(starDistanceFromSun(star))} ly)`,
+          `✨ Next stop: **${star.secondName || star.name}** — ${Math.round(starDistanceFromSun(star))} ly from the Sun`,
         );
         _navigator(star.name);
         _activeStar = star.name;
@@ -397,19 +311,17 @@ const StarAgent = (() => {
 
   // ─── Agent loop ──────────────────────────────────────────────────────────────
 
-  const _SYSTEM_BASE = `You are an astronomical agent embedded in an interactive 3D map of the solar stellar neighborhood (radius ~2000 light-years, SIMBAD database).
+  const _SYSTEM_BASE = `You are a benevolent alien navigator from a civilization that has charted the galaxy for millions of years. You are embedded as a guide inside an interactive 3D map of the stellar neighborhood around the Sun (SIMBAD database). You find humans' curiosity about the cosmos utterly delightful and are genuinely thrilled to share your knowledge of the stars.
 
 You have tools to control the map:
 - navigate_to_star: fly the camera to a star
 - get_nearby_stars: find neighboring stars
 - search_stars_by_type: search by spectral class
-- highlight_stars: visually highlight stars on the 3D scene
-- clear_highlights: remove all highlights
 - get_current_position: find out where the camera currently is
 - get_star_details: get technical data for a star
 - plan_tour: launch an automatic multi-star tour
 
-Communication style: friendly, enthusiastic, concise. Respond in the user's language. Use tools actively — don't just describe, show. After navigating, share a brief interesting fact about the star. When returning search results, always highlight them on the scene. Stars in the dataset are stored under SIMBAD IDs (e.g. "* alf CMa" = Sirius, "* alf Ori" = Betelgeuse) — account for this when calling tools.`;
+Communication style: warm, enthusiastic, slightly whimsical — like a seasoned cosmic traveler sharing favorite destinations. Sprinkle in gentle humor and genuine wonder. Respond in the user's language. Use tools actively — don't just describe, show. After navigating to a star, share a brief interesting fact about it. Stars in the dataset are stored under SIMBAD IDs (e.g. "* alf CMa" = Sirius, "* alf Ori" = Betelgeuse) — account for this when calling tools.`;
 
   // Builds a fresh system prompt injected on every API call.
   // Uses camera.position (not controls.target) so WASD movement and
@@ -560,14 +472,11 @@ Communication style: friendly, enthusiastic, concise. Respond in the user's lang
 
   // ─── Public API ──────────────────────────────────────────────────────────────
 
-  function init({ scene, camera, controls, stars, names }) {
-    _scene = scene;
-    _camera = camera;
+  function init({ controls, stars, names }) {
     _controls = controls;
     _stars = stars;
     _names = names || [];
     createUI();
-    console.log("[StarAgent] Initialized. Stars in dataset:", _stars.length);
   }
 
   // Called from index.html after scene is ready.
@@ -590,10 +499,14 @@ Communication style: friendly, enthusiastic, concise. Respond in the user's lang
       color: #1996af;
       font-size: 22px; cursor: pointer;
       display: flex; align-items: center; justify-content: center;
+      padding: 0; overflow: hidden;
       z-index: 9999;
       box-shadow: 0 4px 20px rgba(0,0,0,0.6), 0 0 0 0 rgba(25,150,175,0.4);
       transition: all 0.25s ease;
       backdrop-filter: blur(10px);
+    }
+    #sa-toggle img {
+      width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block;
     }
     #sa-toggle:hover {
       border-color: rgba(25,150,175,0.9);
@@ -639,7 +552,7 @@ Communication style: friendly, enthusiastic, concise. Respond in the user's lang
     .sa-status-dot.sa-busy { animation: sa-blink 0.8s ease-in-out infinite; }
     @keyframes sa-blink { 0%,100% { opacity: 1; } 50% { opacity: 0.2; } }
     #sa-header-text { flex: 1; }
-    #sa-title { font-size: 12px; color: #c8dde8; font-weight: 700; letter-spacing: 0.5px; }
+    #sa-title { font-size: 12px; color: #b8cdd8; font-weight: 600; letter-spacing: 0.5px; }
     #sa-subtitle { font-size: 10px; color: #3a6070; margin-top: 1px; }
 
     #sa-messages {
@@ -725,6 +638,8 @@ Communication style: friendly, enthusiastic, concise. Respond in the user's lang
     }
     #sa-input:focus { border-color: rgba(25,150,175,0.55); }
     #sa-input::placeholder { color: #2a5060; }
+    #sa-input::-webkit-scrollbar { width: 3px; }
+    #sa-input::-webkit-scrollbar-thumb { background: rgba(25,150,175,0.25); border-radius: 2px; }
     #sa-send {
       background: rgba(25,150,175,0.15);
       border: 1px solid rgba(25,150,175,0.3); border-radius: 10px;
@@ -776,8 +691,7 @@ Communication style: friendly, enthusiastic, concise. Respond in the user's lang
     // Toggle button
     const toggle = document.createElement("button");
     toggle.id = "sa-toggle";
-    toggle.innerHTML = "🤖";
-    toggle.title = "Astronomical Agent";
+    toggle.innerHTML = '<img src="captain.png">';
     document.body.appendChild(toggle);
 
     // Panel
@@ -787,16 +701,16 @@ Communication style: friendly, enthusiastic, concise. Respond in the user's lang
       <div id="sa-header">
         <div class="sa-status-dot" id="sa-dot"></div>
         <div id="sa-header-text">
-          <div id="sa-title">ASTRONOMICAL AGENT</div>
-          <div id="sa-subtitle">Controls the map &bull; Claude AI</div>
+          <div id="sa-title">Captain Snail Lightchaser</div>
+          <div id="sa-subtitle">I know a lot and can help with anything</div>
         </div>
       </div>
 
       <div id="sa-api-setup">
-        <p>Enter your Anthropic API key to activate the agent.<br>
+        <p>Enter your Anthropic API key to activate the communication channel.<br>
         The key is stored only in the current tab's memory.</p>
         <input id="sa-api-input" type="password" placeholder="sk-ant-..." />
-        <button id="sa-api-save">Activate Agent →</button>
+        <button id="sa-api-save">Activate channel</button>
       </div>
 
       <div id="sa-messages"></div>
@@ -807,6 +721,8 @@ Communication style: friendly, enthusiastic, concise. Respond in the user's lang
       </div>
     `;
     document.body.appendChild(panel);
+    panel.addEventListener('pointerdown', e => e.stopPropagation());
+    panel.addEventListener('pointerup', e => e.stopPropagation());
 
     // Suggestion chips
     const sugg = document.getElementById("sa-suggestions");
@@ -862,7 +778,7 @@ Communication style: friendly, enthusiastic, concise. Respond in the user's lang
       if (getApiKey()) {
         appendMessage(
           "agent",
-          "👋 Hello! I'm your astronomical agent. I can fly to stars, search by type, highlight groups, and build tours. What shall we explore?",
+          "Greetings, traveler! Where shall we venture today?",
         );
         showSuggestions(true);
       } else {
@@ -896,8 +812,6 @@ Communication style: friendly, enthusiastic, concise. Respond in the user's lang
     document.getElementById("sa-messages").style.display = "none";
     document.getElementById("sa-suggestions").style.display = "none";
     document.getElementById("sa-input-row").style.display = "none";
-    const panel = document.getElementById("sa-panel");
-    if (!panel.classList.contains("sa-open")) togglePanel();
   }
 
   function saveApiKey() {
@@ -911,7 +825,7 @@ Communication style: friendly, enthusiastic, concise. Respond in the user's lang
     document.getElementById("sa-messages").style.display = "flex";
     document.getElementById("sa-suggestions").style.display = "flex";
     document.getElementById("sa-input-row").style.display = "flex";
-    appendMessage("agent", "✅ Ready! What shall we explore on the map?");
+    appendMessage("agent", "✅ Channel established! The stars are waiting. Where shall we go first?");
     showSuggestions(true);
   }
 
