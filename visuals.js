@@ -24,43 +24,26 @@ const StarVisualsConfig = {
   spikeAngle: 0.0, // rotation in degrees (0 = H+V, 45 = diagonal X)
   spikeFadeBelow: 5.0, // ly — spikes fade out smoothly at camera distance <= this value
 
-  // ── Colors by spectral class ────────────────────────────────────────────────
-  // Override mesh.material.color with calibrated spectral colors for glow/spikes.
-  // Values are linear RGB 0–1, tuned to match real star photography.
-  // Set to null to use mesh.material.color as-is (original app color).
-  spectralColors: {
-    O: { r: 0.61, g: 0.7, b: 1.0, glowMaxDist: 100.0 }, // hot blue
-    B: { r: 0.67, g: 0.75, b: 1.0, glowMaxDist: 90.0 }, // blue-white
-    A: { r: 0.84, g: 0.88, b: 1.0, glowMaxDist: 80.0 }, // white-blue
-    F: { r: 0.98, g: 0.96, b: 1.0, glowMaxDist: 60.0 }, // yellow-white
-    G: { r: 0.7, g: 0.7, b: 0.0, glowMaxDist: 50.0 }, // solar yellow
-    K: { r: 0.8, g: 0.5, b: 0.0, glowMaxDist: 50.0 }, // orange
-    M: { r: 0.1, g: 0.0, b: 0.0, glowMaxDist: 10.0, useMeshColor: true, noCoreDisk: true }, // red dwarf
-    C: { r: 0.9, g: 0.25, b: 0.08, noGlow: true,   useMeshColor: true, noCoreDisk: true }, // carbon star
-    L: { r: 0.8, g: 0.2,  b: 0.05, noGlow: true,   useMeshColor: true, noCoreDisk: true }, // brown dwarf
-    T: { r: 0.7, g: 0.15, b: 0.05, noGlow: true,   useMeshColor: true, noCoreDisk: true }, // T-dwarf
-    Y: { r: 0.7, g: 0.15, b: 0.05, noGlow: true,   useMeshColor: true, noCoreDisk: true }, // Y-dwarf
-    W: { r: 0.71, g: 0.82, b: 1.0 }, // Wolf-Rayet blue
-    D: { r: 0.78, g: 0.86, b: 1.0 }, // white dwarf
-    _default: { r: 0.7, g: 0.15, b: 0.05, noGlow: true, useMeshColor: true, noCoreDisk: true }, // fallback
-  },
-
-  // ── Brightness by spectral class ────────────────────────────────────────────
-  // Multiplier applied to the brightness derived from mesh scale.
-  // Range 0.0–2.0. Reflects real luminosity differences between star types:
-  // hot blue giants (O, B) are intrinsically far brighter than red dwarfs (M).
-  spectralBrightness: {
-    O: 2.0, // O-type: blue supergiants, extremely luminous
-    B: 1.7, // B-type: blue-white giants (Rigel, Spica)
-    A: 1.4, // A-type: white stars (Vega, Sirius)
-    F: 1.2, // F-type: yellow-white (Procyon, Canopus)
-    G: 1.0, // G-type: solar analog — reference value
-    K: 0.8, // K-type: orange stars (Arcturus, Aldebaran)
-    M: 0.4, // M-type: red dwarfs, intrinsically dim
-    C: 0.2, // C-type: carbon stars
-    W: 1.9, // Wolf-Rayet: extremely hot and luminous
-    D: 0.6, // White dwarfs: small but hot
-    _default: 0.1, // fallback for unknown spectral types
+  // ── Per-class parameters ─────────────────────────────────────────────────────
+  // brightness: multiplier on raw mesh-scale brightness (0.0–2.0)
+  // glowMaxDist: ly at which the far glow fades out completely
+  // noGlow: skip the far _points halo for this class
+  // noCoreDisk: use corona/shell glow instead of a solid core disk (close pool)
+  spectralParameters: {
+    O: { brightness: 2.0, glowMaxDist: 300.0 },
+    B: { brightness: 1.7, glowMaxDist: 300.0 },
+    A: { brightness: 1.4, glowMaxDist:  200.0 },
+    F: { brightness: 1.2, glowMaxDist:  200.0 },
+    G: { brightness: 1.0, glowMaxDist:  150.0 },
+    K: { brightness: 0.8, glowMaxDist:  100.0 },
+    M: { brightness: 0.4, glowMaxDist:  30.0, noCoreDisk: true },
+    C: { brightness: 0.2, noGlow: true, noCoreDisk: true },
+    L: { brightness: 0.1, noGlow: true, noCoreDisk: true },
+    T: { brightness: 0.1, noGlow: true, noCoreDisk: true },
+    Y: { brightness: 0.1, noGlow: true, noCoreDisk: true },
+    W: { brightness: 1.9 },
+    D: { brightness: 0.6 },
+    _default: { brightness: 0.1, noGlow: true, noCoreDisk: true },
   },
 };
 // ══════════════════════════════════════════════════════════════════════════════
@@ -71,6 +54,7 @@ const StarVisuals = (() => {
   let _points = null;
   let _uniforms = null;
   const _lastTargetPos = new THREE.Vector3(Infinity);
+  const _dynamicSlots = [];  // { mesh, bufStart } for stars with dynamicPosition = true
 
   // ── Close-star state ──────────────────────────────────────────────────────────
   const _glowStarData = [];
@@ -85,6 +69,7 @@ const StarVisuals = (() => {
     attribute float aGlowMaxDist;
 
     uniform vec3  uTarget;
+    uniform vec3  uTargetCam;
     uniform vec3  uCamPos;
     uniform float uVisRadius;
     uniform float uFadeBand;
@@ -93,19 +78,36 @@ const StarVisuals = (() => {
     varying float vBrightness;
     varying vec3  vColor;
     varying float vFade;
-    varying float vDistFromTarget; // distance to OrbitControls target (visibility culling)
-    varying float vDistFromCam;    // distance to camera (near-fade + spike fade)
-    varying float vGlowMaxDist;    // per-star glow fade distance
+    varying float vDistFromTarget;
+    varying float vDistFromCam;
+    varying float vGlowMaxDist;
+    varying float vDynamic;
 
     void main() {
       vBrightness = aBrightness;
       vColor      = aColor;
+      // Negative aGlowMaxDist signals a dynamic (S-cluster) star; abs value is the real dist.
+      vGlowMaxDist = abs(aGlowMaxDist);
+      bool isDynamic = aGlowMaxDist < 0.0;
+      vDynamic = isDynamic ? 1.0 : 0.0;
 
-      vec4  worldPos       = modelMatrix * vec4(position, 1.0);
-      float distFromTarget = length(worldPos.xyz - uTarget);
-      vDistFromTarget      = distFromTarget;
-      vDistFromCam         = length(worldPos.xyz - uCamPos);
-      vGlowMaxDist         = aGlowMaxDist;
+      float distFromTarget;
+      vec4  mvPos;
+
+      if (isDynamic) {
+        // position is already in camera/eye space (CPU computed at float64 precision
+        // to avoid float32 cancellation at large world-space distances like S-cluster).
+        distFromTarget = length(position.xyz - uTargetCam);
+        vDistFromCam   = length(position.xyz);
+        mvPos          = vec4(position, 1.0);
+      } else {
+        vec4 worldPos  = modelMatrix * vec4(position, 1.0);
+        distFromTarget = length(worldPos.xyz - uTarget);
+        vDistFromCam   = length(worldPos.xyz - uCamPos);
+        mvPos          = modelViewMatrix * vec4(position, 1.0);
+      }
+
+      vDistFromTarget = distFromTarget;
 
       float inner = uVisRadius - uFadeBand;
       vFade = 1.0 - clamp((distFromTarget - inner) / uFadeBand, 0.0, 1.0);
@@ -116,7 +118,6 @@ const StarVisuals = (() => {
         return;
       }
 
-      vec4 mvPos  = modelViewMatrix * vec4(position, 1.0);
       gl_Position = projectionMatrix * mvPos;
 
       float depth    = -mvPos.z;
@@ -139,6 +140,7 @@ const StarVisuals = (() => {
     varying float vDistFromTarget;
     varying float vDistFromCam;
     varying float vGlowMaxDist;
+    varying float vDynamic;
 
     #define HALO_SIZE        ${cfg.haloSize.toFixed(4)}
     #define HALO_AMOUNT      ${cfg.haloAmount.toFixed(4)}
@@ -219,7 +221,7 @@ const StarVisuals = (() => {
       if (b > 0.45) {
         float ar = 0.10 + b * 0.06;
         float aw = 0.012;
-        airy = exp(-pow(abs(r - ar), 2.0) / (aw * aw)) * (b - 0.45) * 0.5 * haloFarFade;
+        airy = exp(-pow(abs(r - ar), 2.0) / (aw * aw)) * (b - 0.45) * 0.5 * (1.0 - spikeFade);
       }
 
       // ── Moffat PSF core ────────────────────────────────────────────────────
@@ -249,10 +251,14 @@ const StarVisuals = (() => {
       float nearFade = clamp(vDistFromCam / 1.5, 0.0, 1.0);
       // Per-star glow distance fade: smoothly disappear over a 20 ly band
       float glowDistFade = 1.0 - smoothstep(vGlowMaxDist - 20.0, vGlowMaxDist, vDistFromCam);
+      // Dynamic (S-cluster) stars cross-fade with the close-pool glow billboard:
+      // fade the far-star point out as camera approaches (1 at d>=5 ly, 0 at d<=1.5 ly),
+      // matching the close-pool glow that fades in over the same range.
+      float closeFade = vDynamic > 0.5 ? smoothstep(1.5, 5.0, vDistFromCam) : 1.0;
       float alpha = clamp(
         halo + spikeVal * 0.8 + airy + core * (0.5 + b * 0.7) + punch,
         0.0, 1.0
-      ) * vFade * nearFade * glowDistFade;
+      ) * vFade * nearFade * glowDistFade * closeFade;
 
       if (alpha < 0.004) discard;
       gl_FragColor = vec4(col, alpha);
@@ -268,7 +274,9 @@ const StarVisuals = (() => {
     varying vec2  vUv;
     void main() {
       vUv = uv - vec2(0.5);
-      vec4 mvPos  = modelViewMatrix * vec4(uStarPos, 1.0);
+      // uStarPos is passed in camera/eye space (computed on CPU at float64 precision)
+      // to avoid float32 cancellation errors at large world-space distances (~26996 ly).
+      vec4 mvPos  = vec4(uStarPos, 1.0);
       gl_Position = projectionMatrix * (mvPos + vec4(position.xy * uSize, 0.0, 0.0));
     }
   `;
@@ -323,6 +331,7 @@ const StarVisuals = (() => {
     }
 
     _glowStarData.length = 0;
+    _dynamicSlots.length = 0;
 
     const positions = [];
     const brightnesses = [];
@@ -339,58 +348,40 @@ const StarVisuals = (() => {
       const lumMult = lumClassMult(mesh.spectralType || "");
       const isGiant = lumMult > 1.0; // true for giants and supergiants
 
-      // Spectral class brightness multiplier, boosted by luminosity class
-      const sbTable = StarVisualsConfig.spectralBrightness;
-      const sbMult =
-        sbTable[spectralClass] !== undefined
-          ? sbTable[spectralClass]
-          : sbTable["_default"];
+      const spTable = StarVisualsConfig.spectralParameters;
+      const spEntry =
+        spTable[spectralClass] !== undefined
+          ? spTable[spectralClass]
+          : spTable["_default"];
       const brightness = Math.max(
         0.05,
-        Math.min(1.0, rawBright * sbMult),
+        Math.min(1.0, rawBright * spEntry.brightness),
       );
 
-      // Color: use calibrated spectralColors table if defined for this class,
-      // otherwise fall back to mesh.material.color (original app color).
-      let r = 1.0,
-        g = 0.929,
-        b = 0.784;
-      const scTable = StarVisualsConfig.spectralColors;
-      const scEntry =
-        scTable[spectralClass] !== undefined
-          ? scTable[spectralClass]
-          : scTable["_default"];
-      if (scEntry) {
-        r = scEntry.r;
-        g = scEntry.g;
-        b = scEntry.b;
-      } else if (mesh.material && mesh.material.color) {
+      let r = 1.0, g = 0.929, b = 0.784;
+      if (mesh.material && mesh.material.color) {
         r = mesh.material.color.r;
         g = mesh.material.color.g;
         b = mesh.material.color.b;
       }
-
-      // For M and below: close-up glow uses the actual mesh material color, not the spectral table
-      let closeR = r, closeG = g, closeB = b;
-      if (scEntry && scEntry.useMeshColor && mesh.material && mesh.material.color) {
-        closeR = mesh.material.color.r;
-        closeG = mesh.material.color.g;
-        closeB = mesh.material.color.b;
-      }
-      const noCoreDisk = !!(scEntry && scEntry.noCoreDisk);
+      const noCoreDisk = !!(spEntry && spEntry.noCoreDisk);
 
       // All stars get the close-up glow billboard
-      _glowStarData.push({ pos: mesh.position.clone(), color: new THREE.Color(closeR, closeG, closeB), brightness, starRadius: sc, noCoreDisk, starMesh: mesh });
+      _glowStarData.push({ pos: mesh.position.clone(), color: new THREE.Color(r, g, b), brightness, starRadius: sc, noCoreDisk, starMesh: mesh });
 
       // noGlow: skip this star for the far points/halo system
-      if (scEntry && scEntry.noGlow && !isGiant) continue;
+      if (spEntry && spEntry.noGlow && !isGiant) continue;
 
+      if (mesh.dynamicPosition) {
+        _dynamicSlots.push({ mesh, bufStart: positions.length });
+      }
       positions.push(mesh.position.x, mesh.position.y, mesh.position.z);
       brightnesses.push(brightness);
       colors.push(r, g, b);
       const glowMaxDist =
-        (scEntry && scEntry.glowMaxDist != null ? scEntry.glowMaxDist : 500.0) * lumMult;
-      glowMaxDists.push(glowMaxDist);
+        (spEntry && spEntry.glowMaxDist != null ? spEntry.glowMaxDist : 500.0) * lumMult;
+      // Negative glowMaxDist signals dynamic (S-cluster) star to the VERT shader.
+      glowMaxDists.push(mesh.dynamicPosition ? -glowMaxDist : glowMaxDist);
     }
 
     const geo = new THREE.BufferGeometry();
@@ -407,10 +398,11 @@ const StarVisuals = (() => {
     const cfg = StarVisualsConfig;
 
     _uniforms = {
-      uTarget: { value: target.clone() },
-      uCamPos: { value: new THREE.Vector3() },
+      uTarget:    { value: target.clone() },
+      uTargetCam: { value: new THREE.Vector3() },
+      uCamPos:    { value: new THREE.Vector3() },
       uVisRadius: { value: cfg.visRadius },
-      uFadeBand: { value: cfg.fadeBand },
+      uFadeBand:  { value: cfg.fadeBand },
       uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
     };
 
@@ -426,6 +418,7 @@ const StarVisuals = (() => {
 
     _points = new THREE.Points(geo, mat);
     _points.renderOrder = 2;
+    _points.frustumCulled = false;
     _points.raycast = () => {};
     _scene.add(_points);
   }
@@ -464,21 +457,50 @@ const StarVisuals = (() => {
   // ── Per-frame update ──────────────────────────────────────────────────────────
   function update() {
     if (!_uniforms || !_controls) return;
+
+    // matrixWorldInverse is refreshed by renderer.render(), which runs AFTER this
+    // function. Force a sync now so all camera-space calculations use the current
+    // frame's camera transform, not the previous one.
+    if (_camera) _camera.updateMatrixWorld();
+
     const t = _controls.target;
     if (_lastTargetPos.distanceTo(t) > 0.0001) {
       _uniforms.uTarget.value.copy(t);
       _lastTargetPos.copy(t);
     }
-    // Always sync camera position — it changes every frame during orbit/pan/zoom
     if (_camera) {
       _uniforms.uCamPos.value.copy(_camera.position);
+      // uTargetCam: controls.target in camera/eye space, computed at float64
+      // so the GPU receives a small accurate float32 value for dynamic star culling.
+      const e = _camera.matrixWorldInverse.elements;
+      _uniforms.uTargetCam.value.set(
+        e[0]*t.x + e[4]*t.y + e[8]*t.z  + e[12],
+        e[1]*t.x + e[5]*t.y + e[9]*t.z  + e[13],
+        e[2]*t.x + e[6]*t.y + e[10]*t.z + e[14]
+      );
+    }
+
+    // Update dynamic (S-cluster) star positions to camera/eye space every frame.
+    // Applying the view transform at float64 in JS cancels the large world-space
+    // offsets (~26996 ly) before they reach the GPU as float32, eliminating the
+    // precision-driven trembling the _points shader would otherwise show.
+    if (_points && _dynamicSlots.length > 0 && _camera) {
+      const arr = _points.geometry.attributes.position.array;
+      const e = _camera.matrixWorldInverse.elements;
+      for (const { mesh, bufStart } of _dynamicSlots) {
+        const wx = mesh.position.x, wy = mesh.position.y, wz = mesh.position.z;
+        arr[bufStart]     = e[0]*wx + e[4]*wy + e[8]*wz  + e[12];
+        arr[bufStart + 1] = e[1]*wx + e[5]*wy + e[9]*wz  + e[13];
+        arr[bufStart + 2] = e[2]*wx + e[6]*wy + e[10]*wz + e[14];
+      }
+      _points.geometry.attributes.position.needsUpdate = true;
     }
 
     // Update close-star pool — assign nearest N glow stars to billboard slots
     if (_camera && _closePool.length > 0 && _glowStarData.length > 0) {
       const camPos = _camera.position;
       const nearby = _glowStarData
-        .map(sd => ({ sd, d: camPos.distanceTo(sd.pos) }))
+        .map(sd => ({ sd, d: camPos.distanceTo(sd.starMesh ? sd.starMesh.position : sd.pos) }))
         .filter(x => x.d < 5.0)
         .sort((a, b) => a.d - b.d)
         .slice(0, CLOSE_POOL_SIZE);
@@ -487,7 +509,11 @@ const StarVisuals = (() => {
         const slot = _closePool[i];
         if (i < nearby.length) {
           const { sd, d } = nearby[i];
-          slot.uniforms.uStarPos.value.copy(sd.pos);
+          // Transform to camera/eye space on the CPU (float64 JS precision) so the
+          // GPU receives a small value that is accurate in float32 — avoids trembling
+          // for stars at large world-space distances such as S-cluster stars (~26996 ly).
+          const wp = sd.starMesh ? sd.starMesh.position : sd.pos;
+          slot.uniforms.uStarPos.value.copy(wp).applyMatrix4(_camera.matrixWorldInverse);
           slot.uniforms.uColor.value.copy(sd.color);
           slot.uniforms.uDist.value = d;
           slot.uniforms.uSize.value = 1.0;
@@ -514,7 +540,9 @@ const StarVisuals = (() => {
     if (_scene) build(stars);
   }
 
-  return { init, update, rebuild };
+  function markDynamicDirty() { /* positions updated every frame — no-op */ }
+
+  return { init, update, rebuild, markDynamicDirty };
 })();
 
 window.StarVisuals = StarVisuals;

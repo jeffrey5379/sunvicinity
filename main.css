@@ -1,8 +1,10 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
+
 body {
 	margin: 0;
 	background-color: #000;
 	color: #fff;
-	font-family: Monospace;
+	font-family: 'Space Mono', 'Courier New', monospace;
 	font-size: 13px;
 	line-height: 24px;
 }
@@ -38,22 +40,14 @@ canvas {
 
 .lil-gui {
 	z-index: 2 !important; /* TODO Solve this in HTML */
+	--font-family: 'Space Mono', 'Courier New', monospace;
 }
 
 #star-info {
 	display: flex;
 	flex-direction: column;
-}
-
-#distance {
+	width: 160px;
 	display: block;
-	width: 150px;
-	text-align: left;
-}
-
-#star-name {
-	display: block;
-	width: 150px;
 	text-align: left;
 }
 

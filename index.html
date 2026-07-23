@@ -32,6 +32,7 @@
       import { createNebula, updateNebula } from "./nebula.js";
       import { plxToLy, degreesToRad } from "./utils.js";
       import { BlackHole, BlackHoleConfig } from "./blackhole.js";
+      import { SCluster } from "./s_cluster.js";
       window.THREE = THREE;
       
       const WELCOME_MESSAGE = "Welcome to the vicinity of the Sun. Switch to exploratory mode to study the mechanics of the model or navigate between stars in free mode.";
@@ -42,7 +43,7 @@
       const CONS_MISS = "No, these two are in place.";
       const CONS_PART_MISS = "One of these two is misplaced. Take a closer look.";
       const CONS_COMPLETED = "Hooray! Now all constellations are in place. The setting to hide/show constellations is available now.";
-      const STARS_STAGE = "Let's find the most interesting neighboring stars. Use 'Go to Sun' if you got lost. ";
+      const STARS_STAGE = "Let's find the most interesting neighboring stars. Use 'Fly to Sun' if you got lost. ";
       const STARS_TO_VISIT = [
         "* alf CMa",
         "* alf Lyr",
@@ -64,7 +65,7 @@
         "Aldebaran is a red giant with a surface temperature of 3,900 K, it is over 400 times as luminous as the Sun.",
         "Arcturus is a red giant of spectral type K, an aging star around 7.1 billion years old.",
       ];
-      const CLUSTERS_STAGE = "Looks like it's time to visit nearest star clusters. Move with WASD. Use mouse panning to correct the direction and the compas to navigate. Zoom in to see the compass.";
+      const CLUSTERS_STAGE = "Looks like it's time to visit nearest star clusters. Move with WASD. Use mouse panning to correct the direction and the compas to navigate.";
       const CLUSTERS_TO_VISIT = ["HYADES", "PLEIADES", "BEEHIVE", "IC 2391", "NGC 3532"];
       const CLUSTERS_INSTRUCTIONS = [
         " The first stop is HYADES cluster in Taurus",
@@ -117,8 +118,9 @@
         clusterLabelLines = [],
         starPositions = [];
       var white = 0xffffff,
-        turquoise = 0x2b8ea6,
-        gray = 0x404040,
+        turquoise = 0x6bcee6,
+        gray = 0x909090,
+        lightGray = 0xdddddd,
         red = 0xff0000,
         orange = 0xcc6600,
         yellow = 0xffff00;
@@ -135,24 +137,27 @@
       var cacheDistance = 240.0,
         lastCachePoint = new THREE.Vector3(),
         densityDistance = 500.0,
-        lazyLoadDistance = 80.0,
+        lazyLoadDistance = 90.0,
         discoverDistance = 40.0;
       var prevUpdate = new THREE.Vector3(),
+        _lastDistTarget = new THREE.Vector3(),
         starGeometry = new THREE.IcosahedronGeometry(1, 4);
       var progress = 0,
         SMOOTH_MESSAGE_TIMEOUT = 30,
         mouseDownX, mouseDownY;
-      var recenterTarget = null;
-      var xSteps = [],
-        ySteps = [],
-        zSteps = [],
-        cameraXsteps = [],
+      var recenterStart = null, recenterObject = null;
+      const starHideMaxDist = {
+        O: 300, B: 300, A: 200, F: 200, G: 150, K: 100, M: 50, C: 10, L: 10, T: 10, Y: 10,
+        _default: 5,
+      };
+      var cameraXsteps = [],
         cameraYsteps = [],
         cameraZsteps = [],
         targetXsteps = [],
         targetYsteps = [],
         targetZsteps = [],
         cameraXstepsTwo = [],
+        cameraYstepsTwo = [],
         cameraZstepsTwo = [],
         mainFont;
       const delay = (millis) =>
@@ -371,16 +376,101 @@
           }
         },
       };
-      gui.add(goToSun, "goToSun").name("Go to Sun");
+      gui.add(goToSun, "goToSun").name("Fly to Sun");
 
       var goToSagA = {
         goToSagA: function () {
           if (controls.position != bh.position) {
+            switchSClusterControls(true);
             recenter(bh);
           }
         }
       };
-      var goToSagACtrl = gui.add(goToSagA, "goToSagA").name("Go to Sagittarius A*");
+      var goToSagACtrl = gui.add(goToSagA, "goToSagA").name("Fly to Sagittarius A*");
+
+      function switchSClusterControls(on) {
+        if (on) {
+          sOrbitAnimCtrl.domElement.classList.remove("hidden");
+          sOrbitYearCtrl.domElement.classList.remove("hidden");
+          sOrbitLinesCtrl.domElement.classList.remove("hidden");
+        }
+        else {
+          sOrbitAnimCtrl.domElement.classList.add("hidden");
+          sOrbitYearCtrl.domElement.classList.add("hidden");
+          sOrbitLinesCtrl.domElement.classList.add("hidden");
+        }
+      }
+
+      var sClusterAnimating = false;
+      var sClusterTime = new Date().getFullYear();
+      var sClusterLastReal = null;
+      var sClusterYearObj = { year: new Date().getFullYear() };
+      var sOrbitAnim = {
+        toggle: function () {
+          sClusterAnimating = !sClusterAnimating;
+          sOrbitAnimCtrl.name(sClusterAnimating ? "⏸ S-cluster animation" : "▶ S-cluster animation");
+          if (sClusterAnimating) sClusterLastReal = performance.now();
+        }
+      };
+      var sOrbitAnimCtrl = gui.add(sOrbitAnim, "toggle").name("▶ S-cluster animation");
+      sOrbitAnimCtrl.domElement.classList.add("hidden");
+      var sOrbitReset = {
+        reset: function () {
+          sClusterAnimating = false;
+          sOrbitAnimCtrl.name("▶ S-cluster animation");
+          sClusterTime = new Date().getFullYear();
+          sClusterLastReal = null;
+          sClusterYearObj.year = Math.round(sClusterTime);
+          SCluster.update(sClusterTime);
+          StarVisuals.markDynamicDirty();
+          if (activeStar && activeStar.dynamicPosition) {
+            var delta = new THREE.Vector3().subVectors(activeStar.position, controls.target);
+            controls.target.add(delta);
+            camera.position.add(delta);
+            if (activeStar.labelPrimary) activeStar.labelPrimary.position.add(delta);
+            if (activeStar.labelSecondary) activeStar.labelSecondary.position.add(delta);
+          }
+        }
+      };
+      var sOrbitResetCtrl = gui.add(sOrbitReset, "reset").name("↺ Reset");
+      sOrbitResetCtrl.domElement.classList.add("hidden");
+      var sOrbitYearCtrl = gui.add(sClusterYearObj, "year").name("Year").listen();
+      sOrbitYearCtrl.domElement.classList.add("hidden");
+      var sOrbitLinesObj = { show: false };
+      var sOrbitLinesCtrl = gui.add(sOrbitLinesObj, "show").name("Show orbits").onChange(function(v) {
+        SCluster.setOrbitsVisible(v);
+      });
+      sOrbitLinesCtrl.domElement.classList.add("hidden");
+
+      // Move Reset button into the Year row (to the right of the year value)
+      (function () {
+        var yearWidget = sOrbitYearCtrl.domElement.querySelector('.widget');
+        var resetBtn   = sOrbitResetCtrl.domElement.querySelector('button');
+        if (yearWidget && resetBtn) {
+          resetBtn.style.marginLeft = '6px';
+          resetBtn.style.width      = 'auto';
+          resetBtn.style.flexShrink = '0';
+          resetBtn.style.padding = 'revert';
+          yearWidget.style.display     = 'flex';
+          yearWidget.style.alignItems  = 'center';
+          yearWidget.appendChild(resetBtn);
+        }
+        sOrbitResetCtrl.domElement.style.display = 'none';
+        var yearName  = sOrbitYearCtrl.domElement.querySelector('.name');
+        var yearInput = sOrbitYearCtrl.domElement.querySelector('input');
+        if (yearName)  yearName.style.color  = 'white';
+        if (yearInput) {
+          yearInput.style.color         = 'white';
+          yearInput.style.appearance    = 'textfield';
+          yearInput.style.flex          = 'none';
+          yearInput.style.boxSizing     = 'content-box';
+          yearInput.style.width         = '4ch';
+          yearInput.style.padding       = '0 4px';
+          yearInput.readOnly            = true;
+          yearInput.style.pointerEvents = 'none';
+          yearInput.style.cursor        = 'default';
+        }
+      })();
 
       var searchCtrl = gui.add(params, "Search").onFinishChange(function (value) {
         var star = starPositions.find((star) => star.name == value);
@@ -430,7 +520,7 @@
       await readClusters();
       await setupScene();
       createNebula(scene, starPositions);
-      StarAgent.init({ scene: scene, camera: camera, controls: controls, stars: starPositions, names: starNames });
+      StarAgent.init({ controls: controls, stars: starPositions, names: starNames });
       StarAgent.setNavigator(function(simbadId) {
         var star = starPositions.find(function(s) { return s.name === simbadId; });
         if (!star) return false;
@@ -698,6 +788,11 @@
           if (object == undefined) {
             object = intersects[0].object;
           }
+          // Child meshes of a group (e.g. black hole parts) have localPosition=(0,0,0).
+          // Promote to the parent group so recenter() uses the correct world position.
+          if (object.type != 'Line' && object.apptype == undefined && object.parent && object.parent.apptype != undefined) {
+            object = object.parent;
+          }
           currentStep = 0;
           if (object.type === "Line" && object.parent.apptype == APPTYPE.CONLABEL && conGameActive) {
             object.material.color.setHex(turquoise);
@@ -741,8 +836,8 @@
                 } else {
                   showMessage(CONS_MISS, 5000);
                 }
-                chosenCon.children[0].material.color.setHex(white);
-                pairCon.children[0].material.color.setHex(white);
+                chosenCon.children[0].material.color.setHex(lightGray);
+                pairCon.children[0].material.color.setHex(lightGray);
                 chosenCon = undefined;
                 pairCon = undefined;
               }
@@ -791,9 +886,12 @@
             tempVar.copy(newCameraPosition);
             tempVar.y -= cameraElevation;
             var rotationRadius = tempVar.distanceTo(newTargetPosition);
-            tempX = Math.atan(newTargetPosition.x / newTargetPosition.z) + Math.PI / 2;
+            tempX = Math.atan(newTargetPosition.x / newTargetPosition.z) + Math.PI/2;
             for (let i = 0; i < clusterAnimationSteps; i++) {
               cameraXstepsTwo[i] = Math.sign(newTargetPosition.z) * Math.sign(newTargetPosition.x) * rotationRadius * Math.cos(tempX);
+              if (progress == 10) {
+                cameraYstepsTwo[i] = -50*Math.cos(tempX + 1.808) ;
+              }
               cameraZstepsTwo[i] = -Math.sign(newTargetPosition.z) * rotationRadius * Math.sin(tempX);
               tempX = tempX - clustTempInc;
             }
@@ -817,23 +915,22 @@
       function recenter(object) {
         currentStep = 0;
         animation = ANIMATION.RECENTER;
-        recenterTarget = object.position.clone();
+        recenterStart = controls.target.clone();
+        recenterObject = object;
         if (activeStar != undefined) {
           showLabel(activeStar, false);
         }
         updateScene(object.position, true);
-        var tempX = 0.0;
-        for (let i = 0; i < animationSteps; i++) {
-          xSteps[i] = (Math.PI * (object.position.x - controls.target.x) * Math.sin(tempX)) / (2 * animationSteps);
-          ySteps[i] = (Math.PI * (object.position.y - controls.target.y) * Math.sin(tempX)) / (2 * animationSteps);
-          zSteps[i] = (Math.PI * (object.position.z - controls.target.z) * Math.sin(tempX)) / (2 * animationSteps);
-          tempX = tempX + tempInc;
-        }
         if (camera.position.distanceTo(object.position) > 0.1 && object.text != undefined) {
           showLabel(object, true);
         }
         if (object.apptype == APPTYPE.STAR) {
           activeStar = object;
+        } else if (object.apptype == APPTYPE.BLACK_HOLE) {
+          activeStar = bh;
+        }
+        if (object.position.distanceTo(bh.position) > 1000) {
+          switchSClusterControls(false);
         }
       }
       
@@ -841,11 +938,13 @@
         scene.traverse(disposeMaterial);
         scene.children.length = 0;
         const constellationLineMaterial = new THREE.LineBasicMaterial({ color: gray });
-        readConstellationData();
+        await readConstellationData();
+        showGalaxyCenter();
         var urls = [];
         for (var i = 1; i <= 12; i++) {
           urls.push("./files/star_data" + i + ".txt");
         }
+        urls.push("./files/s_cluster_data.txt");
         const requests = urls.map((url) => fetch(url));
         await Promise.all(requests)
           .then((responses) => {
@@ -853,6 +952,7 @@
             return Promise.all(text);
           })
           .then((data) => {
+            const sClusterText = data.pop();
             var allText = data.reduce((txt1, txt2) => {
               return txt1 + txt2;
             });
@@ -892,10 +992,19 @@
               var lineGeometry = new THREE.BufferGeometry().setFromPoints(constellationPoints);
               var line = new THREE.Line(lineGeometry, constellationLineMaterial);
               line.visible = false;
-              line.shine = false;
               line.apptype = APPTYPE.CONLINE;
               lines.push(line);
               scene.add(line);
+            }
+            // Init S-cluster stars using same geometry/scale as regular stars
+            var starGeometry = new THREE.SphereGeometry(1, 6, 6);
+            var sElements = SCluster.parse(sClusterText);
+            SCluster.init(scene, bh, sElements, { starGeometry, DEFAULT_RADIUS, APPTYPE });
+            SCluster.initOrbits(scene, gray);
+            for (const mesh of SCluster.getMeshes()) {
+              spheres.push(mesh);
+              clickableObjects.push(mesh);
+              starPositions.push({ name: mesh.name, data: "", position: mesh.position, mesh: mesh });
             }
             showLabel(activeStar, true);
             StarVisuals.init({ scene: scene, camera: camera, controls: controls, stars: spheres });
@@ -903,7 +1012,6 @@
           .catch((e) => console.error(e));
         showInfo(true);
         initDensities();
-        showGalaxyCenter();
         render();
       }
       
@@ -946,9 +1054,11 @@
       
       function showGalaxyCenter() {
         var pos = new THREE.Vector3().setFromSphericalCoords(26996, 2.077078, 4.649851);
-        bh = BlackHole.create(scene, pos, 0.1);
+        bh = BlackHole.create(scene, pos, 0.005);
         bh.name = "Sagittarius A*";
         bh.apptype = APPTYPE.BLACK_HOLE;
+        bh.initialscale = 0.005;
+        bh.text = "Supermassive black hole. 4297000 solar masses.";
         scene.add(bh);
       }
       
@@ -1010,7 +1120,6 @@
         } else {
           sphere.scale.setScalar(DEFAULT_RADIUS * Math.pow(size, 0.25));
         }
-        sphere.shine = true;
         sphere.apptype = APPTYPE.STAR;
         sphere.initialscale = sphere.scale.x;
         sphere.spectralClass = spectralType ? (spectralType.match(/[OBAFGKMLTYXWDC]/) || [""])[0] : "";
@@ -1056,21 +1165,20 @@
           scene.remove(sphere.labelPrimary);
           scene.remove(sphere.labelSecondary);
         } else {
-          if (sphere.apptype != APPTYPE.BLACK_HOLE) {
-            var position = new THREE.Vector3(
-              sphere.position.x + 3 * sphere.initialscale,
-              sphere.position.y,
-              sphere.position.z
-            );
-            var name = sphere.secondName != undefined
-                ? sphere.secondName + " (" + sphere.name + ")"
-                : sphere.name;
-            sphere.labelPrimary = createLabel(name, 0.02, position);
-            scene.add(sphere.labelPrimary);
-            position.y -= 0.015;
-            sphere.labelSecondary = createLabel(sphere.text, 0.005, position);
-            scene.add(sphere.labelSecondary);
-          }
+          var labelOffset = (sphere.apptype === APPTYPE.BLACK_HOLE || sphere.spectralType == 'B') ? 6 : 3;
+          var position = new THREE.Vector3(
+            sphere.position.x + labelOffset * sphere.initialscale,
+            sphere.position.y,
+            sphere.position.z
+          );
+          var name = sphere.secondName != undefined
+              ? sphere.secondName + " (" + sphere.name + ")"
+              : sphere.name;
+          sphere.labelPrimary = createLabel(name, 0.02, position);
+          scene.add(sphere.labelPrimary);
+          position.y -= 0.015;
+          sphere.labelSecondary = createLabel(sphere.text, 0.005, position);
+          scene.add(sphere.labelSecondary);
         }
       }
       
@@ -1101,7 +1209,7 @@
       }
       
       function readConstellationData() {
-        fetch("./files/cons_lines.txt")
+        const p1 = fetch("./files/cons_lines.txt")
           .then((res) => res.text())
           .then((text) => {
             for (let line of text.split("\n")) {
@@ -1116,14 +1224,14 @@
             }
           })
           .catch((e) => console.error(e));
-        fetch("./files/constellations.txt")
+        const p2 = fetch("./files/constellations.txt")
           .then((res) => res.text())
           .then((text) => {
             var groups = [];
             for (let line of text.split("\n")) {
               var data = line.split("|");
               var coord = data[1].split(" "),
-                conLabel = createLabel(data[0], 0.4, controls.target);
+                conLabel = createLabel(data[0], 0.4, controls.target, lightGray);
               conLabel.position.setFromSphericalCoords(30, coord[0], coord[1]);
               conLabel.visible = false;
               conLabel.apptype = APPTYPE.CONLABEL;
@@ -1148,6 +1256,7 @@
             }
           })
           .catch((e) => console.error(e));
+        return Promise.all([p1, p2]);
       }
       
       function swapConsOnInit(first, second) {
@@ -1165,19 +1274,17 @@
       }
       
       function tickRecenter() {
-        var move = new THREE.Vector3(xSteps[currentStep], ySteps[currentStep], zSteps[currentStep]);
         currentStep++;
+        var t = currentStep / animationSteps;
+        var ease = (1 - Math.cos(Math.PI * t)) / 2;
+        var targetPos = recenterStart.clone().lerp(recenterObject.position, ease);
+        var move = new THREE.Vector3().subVectors(targetPos, controls.target);
+        controls.target.copy(targetPos);
         camera.position.add(move);
-        controls.target.add(move);
         camera.lookAt(controls.target);
         if (currentStep >= animationSteps) {
           animation = null;
-          if (recenterTarget) {
-            var snap = new THREE.Vector3().subVectors(recenterTarget, controls.target);
-            camera.position.add(snap);
-            controls.target.copy(recenterTarget);
-            recenterTarget = null;
-          }
+          recenterObject = null;
           updateScene(activeStar.position, false);
           clearScene();
           currentStep = 0;
@@ -1202,8 +1309,8 @@
         pairCon.lookAt(sun.position);
         if (currentStep >= animationSteps) {
           animation = null;
-          chosenCon.children[0].material.color.setHex(white);
-          pairCon.children[0].material.color.setHex(white);
+          chosenCon.children[0].material.color.setHex(lightGray);
+          pairCon.children[0].material.color.setHex(lightGray);
           pairCon.conGroup = null;
           chosenCon.conGroup = null;
           chosenCon = null;
@@ -1253,7 +1360,10 @@
       }
 
       function tickClusterTwo() {
-        var cameramove = new THREE.Vector3(cameraXstepsTwo[currentStep] - cameraXstepsTwo[currentStep - 1], 0.0, cameraZstepsTwo[currentStep] - cameraZstepsTwo[currentStep - 1]);
+        var yStep = progress != 10 ? 0.0 : (cameraYstepsTwo[currentStep] - cameraYstepsTwo[currentStep - 1]);
+        var cameramove = new THREE.Vector3(cameraXstepsTwo[currentStep] - cameraXstepsTwo[currentStep - 1], 
+                                            yStep, 
+                                            cameraZstepsTwo[currentStep] - cameraZstepsTwo[currentStep - 1]);
         currentStep++;
         camera.position.add(cameramove);
         camera.lookAt(controls.target);
@@ -1270,7 +1380,31 @@
         }
       }
 
+      function tickSCluster() {
+        var now = performance.now();
+        sClusterTime += (now - (sClusterLastReal || now)) / 1000.0;
+        sClusterLastReal = now;
+        var prevActivePos = (activeStar && activeStar.dynamicPosition) ? activeStar.position.clone() : null;
+        SCluster.update(sClusterTime);
+        sClusterYearObj.year = Math.round(sClusterTime);
+        StarVisuals.markDynamicDirty();
+        if (activeStar && activeStar.dynamicPosition) {
+          if (animation !== ANIMATION.RECENTER) {
+            var delta = new THREE.Vector3().subVectors(activeStar.position, controls.target);
+            controls.target.add(delta);
+            camera.position.add(delta);
+            if (activeStar.labelPrimary) activeStar.labelPrimary.position.add(delta);
+            if (activeStar.labelSecondary) activeStar.labelSecondary.position.add(delta);
+          } else if (prevActivePos) {
+            var labelDelta = new THREE.Vector3().subVectors(activeStar.position, prevActivePos);
+            if (activeStar.labelPrimary) activeStar.labelPrimary.position.add(labelDelta);
+            if (activeStar.labelSecondary) activeStar.labelSecondary.position.add(labelDelta);
+          }
+        }
+      }
+
       function render() {
+        if (bh && sClusterAnimating) tickSCluster();
         StarVisuals.update();
         BlackHole.update(camera);
         animationHandlers[animation]?.();
@@ -1280,24 +1414,35 @@
         }
         updateNebula(camera);
         adjustStars();
-        if (sun) {
+        if (sun && !controls.target.equals(_lastDistTarget)) {
+          _lastDistTarget.copy(controls.target);
           var lyDist = controls.target.distanceTo(sun.position).toFixed();
           document.getElementById("distance").textContent = lyDist == 0 ? "" : (lyDist < 10000 ? (lyDist + " ly") : ((lyDist/1000).toFixed() + " Kly")) + " from the Sun";
         }
-        renderer.render(scene, camera);
+        BlackHole.render(renderer, scene, camera);
       }
 
       function adjustStars() {
+        var h = renderer.domElement.height;
+        var fovFactor = h / (2 * Math.tan(camera.fov * Math.PI / 360));
         for (var obj of scene.children) {
           if (obj.apptype == APPTYPE.STAR) {
             var distance = obj.position.distanceTo(camera.position);
-            var red = obj.material.color.g == 0.0 && obj.material.color.b == 0.0;
-            var k = Math.sqrt(2 * distance) / 2;
-            if (distance > lazyLoadDistance && obj.initialscale != DEFAULT_RADIUS) {
+            if (distance < 0.001) continue;
+            var sc = obj.spectralClass || '_default';
+            var hideMaxDist = starHideMaxDist[sc] ?? starHideMaxDist['_default'];
+            if (hideMaxDist !== undefined && distance > hideMaxDist) {
+              obj.material.colorWrite = false;
+              obj.material.depthWrite = false;
               continue;
             }
-            if ((k < 1 && k > 0.5) || (!red && k > 1)) {
-              obj.scale.setScalar(k * obj.initialscale);
+            obj.material.colorWrite = true;
+            obj.material.depthWrite = true;
+            var projectedRadius = (obj.initialscale / distance) * fovFactor;
+            if (projectedRadius < 1.0) {
+              obj.scale.setScalar(distance / fovFactor);
+            } else {
+              obj.scale.setScalar(obj.initialscale);
             }
           }
         }
@@ -1312,10 +1457,12 @@
       function recalculateCache(position) {
         spheres = [];
         clickableObjects = [];
+        if (bh) clickableObjects.push(bh);
         for (var star of starPositions) {
-          if (star.position.distanceTo(position) < cacheDistance) {
-            var sphere = createStar(star.data);
+          if (star.mesh || star.position.distanceTo(position) < cacheDistance) {
+            var sphere = star.mesh ? star.mesh : createStar(star.data);
             spheres.push(sphere);
+            if (star.mesh) clickableObjects.push(sphere);
           }
         }
         lastCachePoint.copy(position);
@@ -1336,7 +1483,8 @@
               foundStar = undefined;
             }
           }
-          if (!show && sphere.position.distanceTo(position) > lazyLoadDistance) {
+          var removeRef = sphere.dynamicPosition ? controls.target : position;
+          if (!show && sphere.position.distanceTo(removeRef) > lazyLoadDistance) {
             scene.remove(sphere);
             const idx = clickableObjects.indexOf(sphere);
             if (idx !== -1) clickableObjects.splice(idx, 1);
