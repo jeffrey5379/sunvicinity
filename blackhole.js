@@ -14,8 +14,8 @@ const BlackHoleConfig = {
   diskFlare:     3.0,    // extra puffing near inner edge (multiplier)
 
   // ── Accretion disk brightness ────────────────────────────────────────────────
-  diskBrightness: 2.0,   // overall emission multiplier
-  innerGlowAmt:   1.0,   // brightness boost at inner edge (ISCO region)
+  diskBrightness: 1.0,   // overall emission multiplier
+  innerGlowAmt:   0.5,   // brightness boost at inner edge (ISCO region)
   innerGlowFall:  3.0,   // falloff rate of inner glow
 
   // ── Relativistic Doppler beaming ─────────────────────────────────────────────
@@ -48,6 +48,12 @@ const BlackHoleConfig = {
   photonBrightness: 2.0,
   photonSharpness:  20.0,
   coronaBrightness:  0.1,
+
+  // ── Gravitational lensing (screen-space post-process) ─────────────────────
+  lensing:       true,   // enable/disable
+  lensStrength:  0.02,   // distortion intensity (0 = off, 0.03 = strong)
+  lensRadiusEH:  1.4,    // lensing zone outer edge in EH radii (1 = edge of BH sphere)
+
 };
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -57,6 +63,12 @@ const BlackHole = (() => {
   let _lastScene  = null;
   let _lastPos    = null;
   let _lastRadius = 0.1;
+
+  // Lensing post-process state
+  let _renderTarget = null;
+  let _lensScene    = null;
+  let _lensCamera   = null;
+  let _lensMat      = null;
 
   // ── Glow sphere vertex shader (no config dependence) ─────────────────────────
   const GLOW_VERT = /* glsl */ `
@@ -281,13 +293,147 @@ ${fbmBody}        return sum / ${fbmNorm};
           float sphFrac = dSph / max(d, 0.001);
           e = mix(e, eStream, clamp(sphFrac * 1.2, 0.0, 0.85));
 
-          col += e * d * dt;
+          col += e * d * (dt / max(OUTER - INNER, EH_R * 0.01));
         }
 
         if (col.r + col.g + col.b < 0.004) discard;
         gl_FragColor = vec4(col * BRIGHT, 1.0);
       }
     `;
+  }
+
+  // ── Gravitational lensing shaders ─────────────────────────────────────────────
+
+  const LENS_VERT = /* glsl */ `
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }
+  `;
+
+  const LENS_FRAG = /* glsl */ `
+    precision highp float;
+    varying vec2 vUv;
+    uniform sampler2D tScene;
+    uniform sampler2D tDepth;
+    uniform vec2  uBHUV;
+    uniform float uStrength;
+    uniform float uEHRadius;
+    uniform float uLensRange;
+    uniform float uAspect;
+    uniform float uNear;
+    uniform float uFar;
+    uniform float uBHLinearDepth;
+
+    float linearDepth(float d) {
+      return uNear * uFar / (uFar - d * (uFar - uNear));
+    }
+
+    void main() {
+      // Linear depth comparison — robust at all camera distances
+      float pixLinear = linearDepth(texture2D(tDepth, vUv).r);
+      if (pixLinear < uBHLinearDepth) {
+        gl_FragColor = texture2D(tScene, vUv);
+        return;
+      }
+
+      vec2  d    = vUv - uBHUV;
+      d.x       *= uAspect;
+      float dist = length(d);
+
+      if (dist < uEHRadius) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
+
+      float influence = 1.0 - smoothstep(uEHRadius, uLensRange, dist);
+      if (influence <= 0.0) { gl_FragColor = texture2D(tScene, vUv); return; }
+
+      vec2  offset   = normalize(d) * (uStrength * influence / max(dist, uEHRadius * 0.5));
+      offset.x      /= uAspect;
+      vec2  warpedUV = clamp(vUv - offset, 0.001, 0.999);
+
+      // Don't pull front objects into lensed area
+      float srcLinear = linearDepth(texture2D(tDepth, warpedUV).r);
+      if (srcLinear < uBHLinearDepth) {
+        gl_FragColor = texture2D(tScene, vUv);
+        return;
+      }
+
+      gl_FragColor = texture2D(tScene, warpedUV);
+    }
+  `;
+
+  function _initLens(w, h) {
+    if (_renderTarget) _renderTarget.dispose();
+    if (_lensMat)      _lensMat.dispose();
+    _renderTarget = new THREE.WebGLRenderTarget(w, h, {
+      minFilter:    THREE.LinearFilter,
+      magFilter:    THREE.LinearFilter,
+      depthTexture: new THREE.DepthTexture(w, h),
+    });
+    _lensMat = new THREE.ShaderMaterial({
+      uniforms: {
+        tScene:          { value: null },
+        tDepth:          { value: null },
+        uBHUV:           { value: new THREE.Vector2(0.5, 0.5) },
+        uStrength:       { value: BlackHoleConfig.lensStrength },
+        uEHRadius:       { value: 0.01 },
+        uLensRange:      { value: 0.06 },
+        uAspect:         { value: w / h },
+        uNear:           { value: 0.001 },
+        uFar:            { value: 100000.0 },
+        uBHLinearDepth:  { value: 1.0 },
+      },
+      vertexShader:   LENS_VERT,
+      fragmentShader: LENS_FRAG,
+      depthWrite: false,
+      depthTest:  false,
+    });
+    const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), _lensMat);
+    quad.frustumCulled = false;
+    _lensScene  = new THREE.Scene();
+    _lensScene.add(quad);
+    _lensCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  }
+
+  function render(renderer, scene, camera) {
+    if (!_group || !BlackHoleConfig.lensing) {
+      renderer.render(scene, camera);
+      return;
+    }
+    const pr = renderer.getPixelRatio();
+    const w  = Math.round(renderer.domElement.clientWidth  * pr);
+    const h  = Math.round(renderer.domElement.clientHeight * pr);
+    if (!_lensMat) _initLens(w, h);
+    if (_renderTarget.width !== w || _renderTarget.height !== h) {
+      _renderTarget.setSize(w, h);
+      if (_renderTarget.depthTexture) {
+        _renderTarget.depthTexture.dispose();
+        _renderTarget.depthTexture = new THREE.DepthTexture(w, h);
+      }
+      _lensMat.uniforms.uAspect.value = w / h;
+    }
+
+    renderer.setRenderTarget(_renderTarget);
+    renderer.render(scene, camera);
+    renderer.setRenderTarget(null);
+
+    const bhNDC    = _group.position.clone().project(camera);
+    const isBehind = bhNDC.z > 1.0;
+    _lensMat.uniforms.tScene.value    = _renderTarget.texture;
+    _lensMat.uniforms.tDepth.value    = _renderTarget.depthTexture;
+    _lensMat.uniforms.uBHUV.value.set((bhNDC.x + 1) * 0.5, (bhNDC.y + 1) * 0.5);
+    _lensMat.uniforms.uStrength.value = isBehind ? 0.0 : BlackHoleConfig.lensStrength;
+    _lensMat.uniforms.uAspect.value   = w / h;
+    const distToBH   = camera.position.distanceTo(_group.position);
+    const halfTanFov = Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5));
+    const ehR        = Math.min(0.45, (_lastRadius / Math.max(distToBH, _lastRadius * 0.1)) / (2.0 * halfTanFov));
+    // lensRange must be slightly above uEHRadius (inner smoothstep edge) to avoid UB
+    const lensRange  = Math.max(ehR * BlackHoleConfig.lensRadiusEH, ehR * 1.01 + 1e-6);
+    _lensMat.uniforms.uEHRadius.value      = ehR;
+    _lensMat.uniforms.uLensRange.value     = lensRange;
+    _lensMat.uniforms.uNear.value          = camera.near;
+    _lensMat.uniforms.uFar.value           = camera.far;
+    // Use front face of BH sphere so objects in front of the sphere are always protected
+    _lensMat.uniforms.uBHLinearDepth.value = Math.max(0.001, distToBH - _lastRadius);
+
+    renderer.render(_lensScene, _lensCamera);
   }
 
   // ── Public API ────────────────────────────────────────────────────────────────
@@ -311,7 +457,6 @@ ${fbmBody}        return sum / ${fbmNorm};
       new THREE.MeshBasicMaterial({ color: 0x000000 })
     );
     ehMesh.renderOrder = 1;
-    ehMesh.shine       = true;
     _group.add(ehMesh);
 
     // 2. Photon-sphere glow — rim-brightening additive sphere.
@@ -327,7 +472,6 @@ ${fbmBody}        return sum / ${fbmNorm};
       })
     );
     glowMesh.renderOrder = 2;
-    glowMesh.shine       = true;
     _group.add(glowMesh);
 
     // 3. Volumetric accretion disk + infalling matter sphere.
@@ -351,7 +495,6 @@ ${fbmBody}        return sum / ${fbmNorm};
       _diskMat
     );
     volMesh.renderOrder = 3;
-    volMesh.shine       = true;
     _group.add(volMesh);
 
     return _group;
@@ -382,7 +525,7 @@ ${fbmBody}        return sum / ${fbmNorm};
     );
   }
 
-  return { create, update, rebuild };
+  return { create, update, rebuild, render };
 })();
 
 // Expose to browser console for live inspection (reload page to apply changes).
