@@ -890,7 +890,7 @@
             for (let i = 0; i < clusterAnimationSteps; i++) {
               cameraXstepsTwo[i] = Math.sign(newTargetPosition.z) * Math.sign(newTargetPosition.x) * rotationRadius * Math.cos(tempX);
               if (progress == 10) {
-                cameraYstepsTwo[i] = -50*Math.cos(tempX + 1.808) ;
+                cameraYstepsTwo[i] = -40*Math.cos(tempX + 1.808) ;
               }
               cameraZstepsTwo[i] = -Math.sign(newTargetPosition.z) * rotationRadius * Math.sin(tempX);
               tempX = tempX - clustTempInc;
