@@ -9,6 +9,13 @@ const StarVisualsConfig = {
   visRadius: 80.0, // ly — stars beyond this distance from OrbitControls target are hidden
   fadeBand: 15.0, // ly — fade starts this many ly before visRadius
 
+  // ── Brightness ──────────────────────────────────────────────────────────────
+  // Multiplier applied on top of the raw mesh-scale brightness, independent of
+  // DEFAULT_RADIUS — use this to re-tune overall star brightness after changing
+  // DEFAULT_RADIUS instead of relying on mesh size. Affects both the far-field
+  // glow/points system and the close-up billboard system (near and far alike).
+  globalBrightnessBoost: 3.0,
+
   // ── Halo ────────────────────────────────────────────────────────────────────
   haloSize: 1.0, // multiplier for halo spread (0.1 = tight, 2.0 = very wide)
   haloAmount: 0.6, // halo brightness (0 = no halo, 1 = very bright)
@@ -341,8 +348,13 @@ const StarVisuals = (() => {
     for (const mesh of starMeshes) {
       if (!mesh.position || !mesh.name || !mesh.scale) continue;
 
-      const sc = mesh.scale.x || 0.01;
-      const rawBright = Math.pow(sc / 0.04, 0.5);
+      // Use the true nominal radius, not mesh.scale.x — adjustStars() (index.html)
+      // mutates .scale to keep distant stars at a minimum on-screen size, which
+      // has nothing to do with actual brightness. Reused meshes (S-cluster stars,
+      // never recreated by recalculateCache()) can carry a hugely inflated .scale
+      // left over from that distance compensation into a rebuild.
+      const sc = mesh.initialscale ?? mesh.scale.x ?? 0.01;
+      const rawBright = Math.pow(sc / 0.04, 0.5) * StarVisualsConfig.globalBrightnessBoost;
 
       const spectralClass = mesh.spectralClass || "";
       const lumMult = lumClassMult(mesh.spectralType || "");
@@ -353,10 +365,10 @@ const StarVisuals = (() => {
         spTable[spectralClass] !== undefined
           ? spTable[spectralClass]
           : spTable["_default"];
-      const brightness = Math.max(
-        0.05,
-        Math.min(1.0, rawBright * spEntry.brightness),
-      );
+      // No upper clamp: brightness is bounded downstream by the shader's own
+      // alpha/color clamps (visuals.js VERT/FRAG), so the brightest stars can
+      // bloom further instead of being hard-capped at the same value.
+      const brightness = Math.max(0.05, rawBright * spEntry.brightness);
 
       let r = 1.0, g = 0.929, b = 0.784;
       if (mesh.material && mesh.material.color) {
