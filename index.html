@@ -18,7 +18,7 @@
         <span id="distance"></span>
         <span id="star-name"></span>
       </div>
-      <span id="info">Loading... Please wait</span>
+      <span id="info">Loading...</span>
     </div>
 
     <script src="agent.js"></script>
@@ -99,7 +99,7 @@
       };
       var scene, camera, controls, renderer;
       const SUN_DIAMETER = 1391400,
-        DEFAULT_RADIUS = 0.005;
+        DEFAULT_RADIUS = 0.001;
       var animation,
         animationSteps = 200,
         clusterAnimationSteps = 1500,
@@ -181,6 +181,11 @@
       document.body.appendChild(renderer.domElement);
       const starName = document.getElementById("star-name");
       const info = document.getElementById("info");
+      let loadStep = 0;
+      const LOAD_TOTAL = 19;
+      const updateLoadProgress = () => {
+        info.innerText = "Loading... " + Math.round((loadStep / LOAD_TOTAL) * 100) + "%";
+      };
       var tempMessage, oldText;
       scene = new THREE.Scene();
       camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 50000.0);
@@ -317,6 +322,12 @@
       }
 
       var gui = new GUI({ width: 300 });
+      // Clicks on the Controls panel must not reach the window-level
+      // pointerdown/pointerup handlers below, which raycast into the 3D
+      // scene — otherwise clicking the panel over a star behind it would
+      // also select that star / fly the camera to it.
+      gui.domElement.addEventListener("pointerdown", (e) => e.stopPropagation());
+      gui.domElement.addEventListener("pointerup", (e) => e.stopPropagation());
       gui.add(params, "Mode", ["Free", "Exploratory"])
         .onChange(function (value) {
           switch (value) {
@@ -771,14 +782,16 @@
         raycaster.setFromCamera(mouse, camera);
         var intersects = raycaster.intersectObjects(clickableObjects);
         if (intersects.length === 0) {
-          var nearest = findNearestStarByScreenPos(mouse, 3);
-          if (nearest) intersects = [{ object: nearest}];
+          if (conGameActive) {
+            intersects = raycaster.intersectObjects(conLabelLines);
+          }
+          if (intersects.length === 0) {
+            var nearest = findNearestStarByScreenPos(mouse, 3);
+            if (nearest) intersects = [{ object: nearest}];
+          }
         }
         if (intersects.length > 1 && intersects[0].object.position.distanceTo(camera.position) < 0.1) {
           object = intersects[1].object;
-        }
-        if (conGameActive && intersects.length == 0) {
-          intersects = raycaster.intersectObjects(conLabelLines);
         }
         if (clustersStageActive && intersects.length == 0) {
           intersects = raycaster.intersectObjects(clusterLabelLines);
@@ -806,29 +819,25 @@
               }
               if (pairCon.conGroup != null && pairCon.conGroup == chosenCon.conGroup) {
                 showMessage(CONS_HIT);
-                var centerX = (pairCon.position.x + chosenCon.position.x) / 2,
-                  centerY = (pairCon.position.y + chosenCon.position.y) / 2,
-                  centerZ = (pairCon.position.z + chosenCon.position.z) / 2;
-                const firstCurve = new THREE.QuadraticBezierCurve3(
-                  pairCon.position,
-                  new THREE.Vector3(
-                    (3 * centerX) / 4,
-                    (5 * centerY) / 4,
-                    (3 * centerZ) / 4
-                  ),
-                  chosenCon.position
-                );
-                chosenConSteps = firstCurve.getPoints(animationSteps);
-                const secondCurve = new THREE.QuadraticBezierCurve3(
-                  pairCon.position,
-                  new THREE.Vector3(
-                    (5 * centerX) / 4,
-                    (3 * centerY) / 4,
-                    (5 * centerZ) / 4
-                  ),
-                  chosenCon.position
-                );
-                pairConSteps = secondCurve.getPoints(animationSteps);
+                var center = new THREE.Vector3().addVectors(pairCon.position, chosenCon.position).multiplyScalar(0.5);
+                var u = new THREE.Vector3().subVectors(chosenCon.position, center);
+                var v = new THREE.Vector3().crossVectors(center.clone().normalize(), u).normalize().multiplyScalar(u.length() / 2);
+                chosenConSteps = [];
+                pairConSteps = [];
+                for (let i = 0; i <= animationSteps; i++) {
+                  var ct = Math.PI * (animationSteps - i) / animationSteps;
+                  chosenConSteps.push(new THREE.Vector3(
+                    center.x + u.x * Math.cos(ct) + v.x * Math.sin(ct),
+                    center.y + u.y * Math.cos(ct) + v.y * Math.sin(ct),
+                    center.z + u.z * Math.cos(ct) + v.z * Math.sin(ct)
+                  ));
+                  var st = Math.PI * i / animationSteps;
+                  pairConSteps.push(new THREE.Vector3(
+                    center.x - u.x * Math.cos(st) - v.x * Math.sin(st),
+                    center.y - u.y * Math.cos(st) - v.y * Math.sin(st),
+                    center.z - u.z * Math.cos(st) - v.z * Math.sin(st)
+                  ));
+                }
                 animation = ANIMATION.CONS_SWAP;
               } else {
                 if (pairCon.conGroup != null || chosenCon.conGroup != null) {
@@ -935,6 +944,8 @@
       }
       
       async function setupScene() {
+        loadStep = 0;
+        updateLoadProgress();
         scene.traverse(disposeMaterial);
         scene.children.length = 0;
         const constellationLineMaterial = new THREE.LineBasicMaterial({ color: gray });
@@ -945,13 +956,13 @@
           urls.push("./files/star_data" + i + ".txt");
         }
         urls.push("./files/s_cluster_data.txt");
-        const requests = urls.map((url) => fetch(url));
-        await Promise.all(requests)
-          .then((responses) => {
-            const text = responses.map((res) => res.text());
-            return Promise.all(text);
-          })
-          .then((data) => {
+        const filePromises = urls.map((url) =>
+          fetch(url)
+            .then((res) => res.text())
+            .then((text) => { loadStep++; updateLoadProgress(); return text; })
+        );
+        await Promise.all(filePromises)
+          .then(async (data) => {
             const sClusterText = data.pop();
             var allText = data.reduce((txt1, txt2) => {
               return txt1 + txt2;
@@ -980,6 +991,8 @@
                 }
               }
             }
+            loadStep++; updateLoadProgress();
+            await new Promise((r) => setTimeout(r, 0));
             for (let data of constellations) {
               const constellationPoints = [];
               for (let star of data) {
@@ -996,6 +1009,8 @@
               lines.push(line);
               scene.add(line);
             }
+            loadStep++; updateLoadProgress();
+            await new Promise((r) => setTimeout(r, 0));
             // Init S-cluster stars using same geometry/scale as regular stars
             var starGeometry = new THREE.SphereGeometry(1, 6, 6);
             var sElements = SCluster.parse(sClusterText);
@@ -1006,8 +1021,11 @@
               clickableObjects.push(mesh);
               starPositions.push({ name: mesh.name, data: "", position: mesh.position, mesh: mesh });
             }
+            loadStep++; updateLoadProgress();
+            await new Promise((r) => setTimeout(r, 0));
             showLabel(activeStar, true);
             StarVisuals.init({ scene: scene, camera: camera, controls: controls, stars: spheres });
+            loadStep++; updateLoadProgress();
           })
           .catch((e) => console.error(e));
         showInfo(true);
@@ -1165,7 +1183,7 @@
           scene.remove(sphere.labelPrimary);
           scene.remove(sphere.labelSecondary);
         } else {
-          var labelOffset = (sphere.apptype === APPTYPE.BLACK_HOLE || sphere.spectralType == 'B') ? 6 : 3;
+          var labelOffset = sphere.apptype === APPTYPE.BLACK_HOLE ? 8 : 24;
           var position = new THREE.Vector3(
             sphere.position.x + labelOffset * sphere.initialscale,
             sphere.position.y,
@@ -1222,12 +1240,12 @@
               }
               constellations.push(listOfStars);
             }
+            loadStep++; updateLoadProgress();
           })
           .catch((e) => console.error(e));
         const p2 = fetch("./files/constellations.txt")
           .then((res) => res.text())
           .then((text) => {
-            var groups = [];
             for (let line of text.split("\n")) {
               var data = line.split("|");
               var coord = data[1].split(" "),
@@ -1235,25 +1253,38 @@
               conLabel.position.setFromSphericalCoords(30, coord[0], coord[1]);
               conLabel.visible = false;
               conLabel.apptype = APPTYPE.CONLABEL;
-              conLabel.conGroup = data[2];
+              conLabel.conGroup = null;
               conLabel.conName = data[0];
               conLabel.lookAt(controls.target);
-              if (conLabel.conGroup) {
-                groups.push(conLabel);
-              }
               conLabelLines.push(...conLabel.children);
               constellationNames.push(conLabel);
               scene.add(conLabel);
             }
-            while (groups.length > 0) {
-              var first = groups[0];
-              for (let conLabel of groups) {
-                if (first != conLabel && first.conGroup == conLabel.conGroup) {
-                  swapConsOnInit(first, conLabel);
-                  groups = groups.filter((label) => label.conGroup != first.conGroup);
+            var neighborPairs = [];
+            for (let i = 0; i < constellationNames.length; i++) {
+              for (let j = i + 1; j < constellationNames.length; j++) {
+                if (constellationNames[i].position.angleTo(constellationNames[j].position) <= Math.PI / 6) {
+                  neighborPairs.push([constellationNames[i], constellationNames[j]]);
                 }
               }
             }
+            for (let i = neighborPairs.length - 1; i > 0; i--) {
+              var j = Math.floor(Math.random() * (i + 1));
+              [neighborPairs[i], neighborPairs[j]] = [neighborPairs[j], neighborPairs[i]];
+            }
+            var used = new Set(), groupId = 1;
+            for (let [a, b] of neighborPairs) {
+              if (!used.has(a) && !used.has(b)) {
+                a.conGroup = groupId;
+                b.conGroup = groupId;
+                groupId++;
+                used.add(a);
+                used.add(b);
+                swapConsOnInit(a, b);
+                if (groupId > 5) break;
+              }
+            }
+            loadStep++; updateLoadProgress();
           })
           .catch((e) => console.error(e));
         return Promise.all([p1, p2]);
@@ -1405,9 +1436,16 @@
 
       function render() {
         if (bh && sClusterAnimating) tickSCluster();
+        // Animation handlers (recenter/cluster fly-to) move the camera for this
+        // frame — StarVisuals/BlackHole must read the camera AFTER that, not
+        // before, otherwise their CPU-precomputed eye-space uniforms (close-star
+        // billboards, disk uCamLocal) lag one frame behind the GPU-rendered
+        // far-field points, which pick up the current camera transform
+        // automatically at render() time. That mismatch is what shows up as
+        // parts of a star's shader (core vs spikes/halo) desyncing mid-flight.
+        animationHandlers[animation]?.();
         StarVisuals.update();
         BlackHole.update(camera);
-        animationHandlers[animation]?.();
         if (arrow != undefined && scene.children.includes(arrow) && clusters[progress - 6]) {
           updateArrowHud();
           arrow.lookAt(clusters[progress - 6].center);
@@ -1451,10 +1489,12 @@
       function clearScene() {
         for (var sphere of scene.children.filter((obj) => obj.apptype == APPTYPE.STAR && !spheres.includes(obj))) {
           scene.remove(sphere);
+          disposeMaterial(sphere);
         }
       }
-      
+
       function recalculateCache(position) {
+        var oldSpheres = spheres;
         spheres = [];
         clickableObjects = [];
         if (bh) clickableObjects.push(bh);
@@ -1463,6 +1503,17 @@
             var sphere = star.mesh ? star.mesh : createStar(star.data);
             spheres.push(sphere);
             if (star.mesh) clickableObjects.push(sphere);
+          }
+        }
+        // createStar() always builds a fresh mesh/material for non-S-cluster stars,
+        // so any old regular star mesh not carried over into the new cache is stale
+        // and must release its material (starGeometry itself is shared, never disposed).
+        for (var old of oldSpheres) {
+          if (!old.dynamicPosition && !spheres.includes(old)) {
+            scene.remove(old);
+            disposeMaterial(old);
+            var idx = clickableObjects.indexOf(old);
+            if (idx !== -1) clickableObjects.splice(idx, 1);
           }
         }
         lastCachePoint.copy(position);
