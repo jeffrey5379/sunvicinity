@@ -846,6 +846,15 @@ Communication style: warm, enthusiastic, slightly whimsical — like a seasoned 
     runAgentLoop(text);
   }
 
+  // Untrusted text (user input or model output) must never reach innerHTML
+  // unescaped — it can carry the sa_api_key out of sessionStorage via XSS.
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
   function appendMessage(type, text) {
     const msgs = document.getElementById("sa-messages");
     if (!msgs) return;
@@ -853,8 +862,9 @@ Communication style: warm, enthusiastic, slightly whimsical — like a seasoned 
     if (thinking && type !== "thinking") thinking.remove();
     const div = document.createElement("div");
     div.className = `sa-msg sa-msg-${type}`;
-    // Simple markdown: **bold**
-    div.innerHTML = text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    // Simple markdown: **bold** (applied after escaping, so <strong> is the
+    // only HTML tag that can ever end up in this innerHTML)
+    div.innerHTML = escapeHtml(text).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
     msgs.appendChild(div);
     scrollMessages();
   }
@@ -867,7 +877,7 @@ Communication style: warm, enthusiastic, slightly whimsical — like a seasoned 
     const params = Object.entries(input)
       .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
       .join(", ");
-    div.innerHTML = `<span class="sa-tool-name">⚙ ${toolName}</span> <span style="color:#1a5060">${params}</span>`;
+    div.innerHTML = `<span class="sa-tool-name">⚙ ${escapeHtml(toolName)}</span> <span style="color:#1a5060">${escapeHtml(params)}</span>`;
     msgs.appendChild(div);
     scrollMessages();
   }
