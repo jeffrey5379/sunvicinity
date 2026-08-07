@@ -6,7 +6,7 @@ import { lumClassMult } from "./utils.js";
 // ══════════════════════════════════════════════════════════════════════════════
 const StarVisualsConfig = {
   // ── Visibility ──────────────────────────────────────────────────────────────
-  visRadius: 80.0, // ly — stars beyond this distance from OrbitControls target are hidden
+  visRadius: 100.0, // ly — stars beyond this distance from OrbitControls target are hidden
   fadeBand: 15.0, // ly — fade starts this many ly before visRadius
 
   // ── Brightness ──────────────────────────────────────────────────────────────
@@ -14,13 +14,13 @@ const StarVisualsConfig = {
   // DEFAULT_RADIUS — use this to re-tune overall star brightness after changing
   // DEFAULT_RADIUS instead of relying on mesh size. Affects both the far-field
   // glow/points system and the close-up billboard system (near and far alike).
-  globalBrightnessBoost: 3.0,
+  globalBrightnessBoost: 2.0,
 
   // ── Halo ────────────────────────────────────────────────────────────────────
   haloSize: 1.0, // multiplier for halo spread (0.1 = tight, 2.0 = very wide)
   haloAmount: 0.6, // halo brightness (0 = no halo, 1 = very bright)
   haloFadeBelow: 0.0, // ly — halo fades out smoothly at camera distance <= this value
-  haloFadeAbove: 80.0, // ly — halo fades out smoothly at camera distance >= this value
+  haloFadeAbove: 150.0, // ly — halo fades out smoothly at camera distance >= this value
 
   // ── Core ────────────────────────────────────────────────────────────────────
   coreWidth: 0.2, // multiplier for Moffat PSF core radius (0.5 = sharp, 3.0 = bloated)
@@ -41,8 +41,8 @@ const StarVisualsConfig = {
     B: { brightness: 1.7, glowMaxDist: 300.0 },
     A: { brightness: 1.4, glowMaxDist:  200.0 },
     F: { brightness: 1.2, glowMaxDist:  200.0 },
-    G: { brightness: 1.0, glowMaxDist:  150.0 },
-    K: { brightness: 0.8, glowMaxDist:  100.0 },
+    G: { brightness: 0.9, glowMaxDist:  150.0 },
+    K: { brightness: 0.7, glowMaxDist:  100.0 },
     M: { brightness: 0.4, glowMaxDist:  30.0, noCoreDisk: true },
     C: { brightness: 0.2, noGlow: true, noCoreDisk: true },
     L: { brightness: 0.1, noGlow: true, noCoreDisk: true },
