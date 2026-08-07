@@ -40,7 +40,7 @@
 * eta Sgr|* eps Sgr|* gam Sgr|* del Sgr|* lam Sgr|* mu. Sgr
 * lam Sgr|* phi Sgr|* sig Sgr|* tau Sgr|* zet Sgr|* eps Sgr|* del Sgr|* phi Sgr|* zet Sgr
 * eps Tel|* alf Tel|* zet Tel
-* gam CrA|* alf CrA|* bet CrA|* del CrA|* tet CrA
+* gam CrA A|* alf CrA|* bet CrA|* del CrA|* tet CrA
 * del Cap|* eps Cap|* zet Cap|* ome Cap|* psi Cap|* bet Cap|* alf01 Cap|* tet Cap|* gam Cap|* del Cap
 * eps Aqr|* bet Aqr|* iot Aqr
 * bet Aqr|* alf Aqr|* pi. Aqr|* zet Aqr|* eta Aqr
