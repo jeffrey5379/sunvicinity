@@ -2,13 +2,12 @@
 
 One EC2 instance runs both the API (`server/index.js`) and a Caddy reverse
 proxy serving the built frontend. The ~17 GB `stardata.db` lives in a private
-S3 bucket and is pulled onto the instance on every boot, so the deploy stack
-holds **no persistent state** — bring it up for a few hours, then destroy it.
+S3 bucket and is pulled onto the instance on every boot
 
 ```
 infra/
-  bootstrap/   run once. Creates the S3 bucket. ~$0.40/month, forever.
-  deploy/      apply = whole app up on one EC2 box. destroy = $0.
+  bootstrap/   run once. Creates the S3 bucket
+  deploy/      apply = whole app up on one EC2 box
 ```
 
 ## Prerequisites
@@ -28,8 +27,6 @@ terraform apply
 aws s3 cp ../../scripts/stardata.db s3://sunvicinity-XXXXXXXX/stardata.db
 ```
 
-Re-run the `aws s3 cp` only when you rebuild the DB locally.
-
 ## Each deploy session
 
 ```sh
@@ -40,40 +37,11 @@ terraform apply         # ~30s to create; instance then boots for ~4-6 min
 
 Open the `app_url` output (`http://<public-ip>/sunvicinity/`). First boot
 installs Node + Caddy, clones the repo, downloads the DB, runs `npm ci` and
-`vite build`, so the URL 404s/refuses until that finishes. To watch:
-
-```sh
-ssh ec2-user@<public-ip>            # needs key_name set; else EC2 Instance Connect
-tail -f /var/log/sunvicinity-bootstrap.log
-journalctl -u sunvicinity -f
-```
-
-When done:
-
-```sh
-terraform destroy
-```
-
-That removes the instance, EBS volume, VPC, IAM role, security group — billing
-for this stack goes to zero. The S3 bucket (bootstrap) stays.
-
-## Cost
-
-| When | What's billed | Approx |
-|---|---|---|
-| Idle (destroyed) | S3 Standard, 17 GB | **~$0.40 / month** |
-| Running | `t4g.large` + 40 GB gp3 | **~$0.072 / hour** (≈ $0.29 for a 4h session) |
-| Running | data transfer out | a few GB/session → cents |
-
-`us-east-1`, on-demand. A 1-year Compute Savings Plan would cut the hourly
-rate ~35%, but for occasional few-hour sessions on-demand is simpler and the
-absolute cost is tiny.
+`vite build`, so the URL 404s/refuses until that finishes
 
 ## Options
 
-- **Slow queries?** Set `instance_type = "t4g.xlarge"` (16 GB) so more of the
-  17 GB DB stays in the OS page cache. First few queries after boot are always
-  colder.
+- **Instance size:** default `t4g.2xlarge` (8 vCPU / 32 GB)
 - **Lock down SSH:** set `ssh_ingress_cidr = "<your.ip>/32"`. Port 80 is always
   open to the world (public read-only app).
 - **HTTPS:** needs a domain. Point it at the instance IP, then change the Caddy
