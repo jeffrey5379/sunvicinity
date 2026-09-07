@@ -30,10 +30,11 @@
       import { FontLoader } from "three/addons/loaders/FontLoader.js";
       import { OrbitControls } from "three/addons/controls/OrbitControls.js";
       import { createNebula, updateNebula } from "./nebula.js";
-      import { plxToLy, degreesToRad } from "./utils.js";
       import { BlackHole, BlackHoleConfig } from "./blackhole.js";
       import { SCluster } from "./s_cluster.js";
       import { StarCatalog } from "./star_catalog.js";
+      import { maxVisibilityDistance } from "./utils.js";
+      import { loadDensityGrid, buildDensityMapGroup, getDensityCellCenter, highlightDensityCell, clearDensityHighlight } from "./density_map.js";
       window.THREE = THREE;
       
       const WELCOME_MESSAGE = "Welcome to the vicinity of the Sun. Switch to exploratory mode to study the mechanics of the model or navigate between stars in free mode.";
@@ -91,16 +92,16 @@
         CLUSTER_LABEL: "CLUSTER_LABEL",
         BLACK_HOLE: "BLACK_HOLE",
       };
-      const ANIMATION = { RECENTER: "RECENTER", CONS_SWAP: "CONS_SWAP", CLUSTER_ONE: "CLUSTER_ONE", CLUSTER_TWO: "CLUSTER_TWO" };
+      const ANIMATION = { RECENTER: "RECENTER", CONS_SWAP: "CONS_SWAP", CLUSTER_ONE: "CLUSTER_ONE", CLUSTER_TWO: "CLUSTER_TWO", DENSITY_ZOOM: "DENSITY_ZOOM" };
       const animationHandlers = {
-        [ANIMATION.RECENTER]:    tickRecenter,
-        [ANIMATION.CONS_SWAP]:   tickConsSwap,
-        [ANIMATION.CLUSTER_ONE]: tickClusterOne,
-        [ANIMATION.CLUSTER_TWO]: tickClusterTwo,
+        [ANIMATION.RECENTER]:     tickRecenter,
+        [ANIMATION.CONS_SWAP]:    tickConsSwap,
+        [ANIMATION.CLUSTER_ONE]:  tickClusterOne,
+        [ANIMATION.CLUSTER_TWO]:  tickClusterTwo,
+        [ANIMATION.DENSITY_ZOOM]: tickDensityZoom,
       };
       var scene, camera, controls, renderer;
-      const SUN_DIAMETER = 1391400,
-        DEFAULT_RADIUS = 0.001;
+      const DEFAULT_RADIUS = 0.001;
       var animation,
         animationSteps = 200,
         clusterAnimationSteps = 1500,
@@ -121,34 +122,26 @@
       var white = 0xffffff,
         turquoise = 0x6bcee6,
         gray = 0x909090,
-        lightGray = 0xdddddd,
-        red = 0xff0000,
-        orange = 0xcc6600,
-        yellow = 0xffff00;
+        lightGray = 0xdddddd;
       var conGameActive = false,
         clustersStageActive = false,
         constBefore, chosenCon, pairCon, arrow, actualMessage,
-        foundStar, activeStar, activeCluster, sun, bh;
+        activeStar, activeCluster, sun, bh;
       var chosenConSteps = [],
         pairConSteps = [],
         starColours = [],
         starNames = [],
-        clusters = [],
-        densities = [];
-      var densityDistance = 500.0,
-        visibleDistance = 100.0,
-        discoverDistance = 40.0;
+        clusters = [];
+      var visibleDistance = 500.0,
+        discoverDistance = 50.0;
       var prevUpdate = new THREE.Vector3(),
         _lastDistTarget = new THREE.Vector3(),
-        starGeometry = new THREE.IcosahedronGeometry(1, 4);
+        starGeometry = new THREE.IcosahedronGeometry(1, 0);
       var progress = 0,
         SMOOTH_MESSAGE_TIMEOUT = 30,
         mouseDownX, mouseDownY;
       var recenterStart = null, recenterObject = null;
-      const starHideMaxDist = {
-        O: 300, B: 300, A: 200, F: 200, G: 150, K: 100, M: 50, C: 10, L: 10, T: 10, Y: 10,
-        _default: 5,
-      };
+      var visibilityConfig = null;
       var cameraXsteps = [],
         cameraYsteps = [],
         cameraZsteps = [],
@@ -181,18 +174,18 @@
       const starName = document.getElementById("star-name");
       const info = document.getElementById("info");
       let loadStep = 0;
-      const LOAD_TOTAL = 19;
-      const updateLoadProgress = () => {
+      const LOAD_TOTAL = 10;
+      const updateProgressText = () => {
         info.innerText = "Loading... " + Math.round((loadStep / LOAD_TOTAL) * 100) + "%";
       };
       var tempMessage, oldText;
       scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 50000.0);
+      camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 100000.0);
       camera.position.set(0, 0, 3);
       camera.lookAt(0, 0, 0);
       controls = new OrbitControls(camera, renderer.domElement);
       controls.minDistance = 0.2;
-      controls.maxDistance = 50000.0;
+      controls.maxDistance = 100000.0;
       controls.enableKeys = false;
       controls.enablePan = false;
       controls.addEventListener("change", render);
@@ -338,21 +331,159 @@
       var showDensityCtrl = gui.add(params, "showDensity")
         .name("Show density")
         .onChange(function (value) {
-          showDensity(value);
+          toggleDensityMap(value);
         });
-      
-      function showDensity(value) {
-        params.showDensity = value;
-        for (var density of densities) {
-          if (value && density.position.distanceTo(controls.target) < densityDistance) {
-            scene.add(density);
-          }
-          if (!value) {
-            scene.remove(density);
-          }
+
+      var densityMapGroup = null, densityMapRequest = null, preDensityMapChildren = null, preDensityMapClickable = null;
+      var preDensityMapCameraFar = null;
+      var densityMapMesh = null, hoveredDensityInstanceId = -1;
+      var DENSITY_MODE_CAMERA_FAR = 500000.0;
+      var DENSITY_ZOOM_OUT_LY = 15000.0, DENSITY_ZOOM_IN_LY = 5.0;
+      var densityZoomStartDist = 0, densityZoomEndDist = 0, densityZoomDir = null, densityZoomOnComplete = null;
+      var densityZoomStartTarget = new THREE.Vector3(), densityZoomEndTarget = new THREE.Vector3();
+      function startDensityZoom(targetDistanceLy, onComplete, endTarget) {
+        var offset = new THREE.Vector3().subVectors(camera.position, controls.target);
+        densityZoomStartDist = offset.length();
+        densityZoomDir = densityZoomStartDist > 1e-6 ? offset.normalize() : new THREE.Vector3(0, 0, 1);
+        densityZoomEndDist = targetDistanceLy;
+        densityZoomOnComplete = onComplete || null;
+        densityZoomStartTarget.copy(controls.target);
+        densityZoomEndTarget.copy(endTarget || controls.target);
+        currentStep = 0;
+        animation = ANIMATION.DENSITY_ZOOM;
+      }
+      function tickDensityZoom() {
+        currentStep++;
+        var t = currentStep / animationSteps;
+        var ease = (1 - Math.cos(Math.PI * t)) / 2;
+        var dist = densityZoomStartDist + (densityZoomEndDist - densityZoomStartDist) * ease;
+        controls.target.copy(densityZoomStartTarget).lerp(densityZoomEndTarget, ease);
+        camera.position.copy(controls.target).addScaledVector(densityZoomDir, dist);
+        camera.lookAt(controls.target);
+        if (currentStep >= animationSteps) {
+          animation = null;
+          currentStep = 0;
+          var onComplete = densityZoomOnComplete;
+          densityZoomOnComplete = null;
+          onComplete?.();
         }
       }
-      
+
+      // Shared by the checkbox-driven exit (toggleDensityMap(false)) and
+      // the click-a-cell-to-fly exit (flyToNearestBrightStarAt) — both
+      // land here once their zoom-in has finished, the only difference is
+      // what (if anything) runs after.
+      function restoreSceneAfterDensityMode() {
+        scene.remove(densityMapGroup);
+        for (var child of preDensityMapChildren) scene.add(child);
+        preDensityMapChildren = null;
+        for (var obj of preDensityMapClickable) clickableObjects.push(obj);
+        preDensityMapClickable = null;
+        if (preDensityMapCameraFar != null) {
+          camera.far = preDensityMapCameraFar;
+          camera.updateProjectionMatrix();
+          preDensityMapCameraFar = null;
+        }
+      }
+
+      async function toggleDensityMap(value) {
+        params.showDensity = value;
+        if (!value) {
+          if (preDensityMapChildren) {
+            if (hoveredDensityInstanceId !== -1) {
+              clearDensityHighlight(densityMapMesh, hoveredDensityInstanceId);
+              hoveredDensityInstanceId = -1;
+            }
+            startDensityZoom(DENSITY_ZOOM_IN_LY, restoreSceneAfterDensityMode);
+          }
+          return;
+        }
+        if (preDensityMapChildren) {
+          densityZoomOnComplete = null;
+          startDensityZoom(DENSITY_ZOOM_OUT_LY);
+          return;
+        }
+        if (!densityMapRequest) {
+          densityMapRequest = loadDensityGrid("./files/density-grid.bin")
+            .then((grid) => {
+              densityMapGroup = buildDensityMapGroup(grid);
+              densityMapMesh = densityMapGroup.getObjectByName("densityCells");
+            })
+            .catch((e) => {
+              console.error("density map load failed:", e);
+              showMessage("Density map unavailable", 3000);
+              params.showDensity = false;
+              showDensityCtrl.updateDisplay();
+            });
+        }
+        await densityMapRequest;
+        if (!densityMapGroup || !params.showDensity || preDensityMapChildren) return;
+        preDensityMapChildren = scene.children.slice();
+        for (var child of preDensityMapChildren) scene.remove(child);
+        preDensityMapClickable = clickableObjects.slice();
+        clickableObjects.length = 0;
+        preDensityMapCameraFar = camera.far;
+        camera.far = DENSITY_MODE_CAMERA_FAR;
+        camera.updateProjectionMatrix();
+        scene.add(densityMapGroup);
+        startDensityZoom(DENSITY_ZOOM_OUT_LY);
+      }
+
+      async function fetchNearestBrightStar(x, y, z) {
+        const params = "x=" + x + "&y=" + y + "&z=" + z;
+        try {
+          const [bufferRes, dictRes] = await Promise.all([
+            fetch("/api/stars/nearest?" + params),
+            fetch("/api/dictionaries/nearest?" + params),
+          ]);
+          if (bufferRes.status === 404 || dictRes.status === 404) return null;
+          if (!bufferRes.ok || !dictRes.ok) {
+            throw new Error("nearest-star request failed: " + bufferRes.status + "/" + dictRes.status);
+          }
+          const [buffer, dictionaries] = await Promise.all([bufferRes.arrayBuffer(), dictRes.json()]);
+          const header = new Uint32Array(buffer, 0, 9);
+          const nameOffsets = new Uint32Array(buffer, header[5], 2); // count is always 1 here
+          const namesBlob = new Uint8Array(buffer, header[6], header[7]);
+          const name = new TextDecoder().decode(namesBlob.subarray(nameOffsets[0], nameOffsets[1]));
+          starCatalog.addBatch(buffer, dictionaries);
+          return starCatalog.findByName(name);
+        } catch (e) {
+          console.error(e);
+          return null;
+        }
+      }
+
+      function flyToNearestBrightStarAt(center) {
+        if (!preDensityMapChildren) return; // not actually in density mode — ignore
+        if (hoveredDensityInstanceId !== -1) {
+          clearDensityHighlight(densityMapMesh, hoveredDensityInstanceId);
+          hoveredDensityInstanceId = -1;
+        }
+        var starPromise = fetchNearestBrightStar(center.x, center.y, center.z);
+        params.showDensity = false;
+        showDensityCtrl.updateDisplay();
+
+        startDensityZoom(DENSITY_ZOOM_IN_LY, function () {
+          restoreSceneAfterDensityMode();
+          starPromise.then(function (star) {
+            if (star) {
+              // Snap the last few ly from "the cell center" to "the star's
+              // exact position" — negligible next to the zoom distance
+              // just traveled, but keeps controls.target exactly on the
+              // star rather than merely near it.
+              var toStar = new THREE.Vector3().subVectors(star.position, controls.target);
+              controls.target.copy(star.position);
+              camera.position.add(toStar);
+              camera.lookAt(controls.target);
+              StarAgent.setActiveStar(star.name);
+              settleAtStar(star);
+            } else {
+              showMessage("No bright star found near that point", 3000);
+            }
+          });
+        }, center);
+      }
+
       function showConstellations(value) {
         params.showConstellations = value;
         for (let line of lines) {
@@ -471,23 +602,49 @@
         }
       })();
 
-      var searchCtrl = gui.add(params, "Search").onFinishChange(function (value) {
-        var star = starCatalog.find((star) => star.name == value);
+      async function searchStarOnServer(name) {
+        const params = "name=" + encodeURIComponent(name);
+        try {
+          const [bufferRes, dictRes] = await Promise.all([
+            fetch("/api/stars/search?" + params),
+            fetch("/api/dictionaries/search?" + params),
+          ]);
+          if (bufferRes.status === 404 || dictRes.status === 404) return null;
+          if (!bufferRes.ok || !dictRes.ok) {
+            throw new Error("search request failed: " + bufferRes.status + "/" + dictRes.status);
+          }
+          const [buffer, dictionaries] = await Promise.all([bufferRes.arrayBuffer(), dictRes.json()]);
+          starCatalog.addBatch(buffer, dictionaries);
+          return starCatalog.findByName(name);
+        } catch (e) {
+          console.error(e);
+          return null;
+        }
+      }
+
+      async function runSearch(value) {
+        var resolvedName = value;
+        var star = starCatalog.findByName(value);
         if (star == null) {
           var name = starNames.find((obj) => obj.name == value);
           if (name != null) {
-            star = starCatalog.find((obj) => obj.name == name.code);
+            resolvedName = name.code;
+            star = starCatalog.findByName(resolvedName);
           }
         }
+        if (star == null) {
+          star = await searchStarOnServer(resolvedName);
+        }
         if (star != null) {
-          foundStar = star.name;
           StarAgent.setActiveStar(star.name);
           recenter(star);
         } else {
           showMessage("Nothing found", 3000);
         }
-        this.setValue("");
-      });
+        searchCtrl.setValue("");
+      }
+
+      var searchCtrl = gui.add(params, "Search");
 
       gui.add(params, "Info", ["None", "About", "Feedback"])
         .onChange(function (value) {
@@ -509,6 +666,16 @@
         });
       setupCustomDropdowns(gui);
       var searchEl = searchCtrl.$input;
+      searchEl.addEventListener("keydown", function (event) {
+        if (event.key !== "Enter") {
+          return;
+        }
+        var value = searchEl.value.trim();
+        if (value === "") {
+          return;
+        }
+        runSearch(value);
+      });
       showConstCtrl.domElement.classList.add("hidden");
       showDensityCtrl.domElement.classList.add("hidden");
       searchCtrl.domElement.classList.add("hidden");
@@ -521,9 +688,8 @@
       createNebula(scene, starCatalog);
       StarAgent.init({ controls: controls, stars: starCatalog, names: starNames });
       StarAgent.setNavigator(function(simbadId) {
-        var star = starCatalog.find(function(s) { return s.name === simbadId; });
+        var star = starCatalog.findByName(simbadId);
         if (!star) return false;
-        foundStar = star.name;
         recenter(star);
         return true;
       });
@@ -546,7 +712,7 @@
           }
         }
         console.warn("Cannot determine colour for spectral type: " + spectralType);
-        return [0.0, 0.9, 0.0];
+        return [0.9, 0.0, 0.0];
       }
       
       function readColours() {
@@ -610,6 +776,10 @@
         event.preventDefault();
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        if (params.showDensity) {
+          updateDensityHover();
+          return;
+        }
         raycaster.setFromCamera(mouse, camera);
         var intersects = raycaster.intersectObjects(clickableObjects);
         if (intersects.length === 0) {
@@ -625,7 +795,18 @@
           showStarName("");
         }
       }
-      
+
+      function updateDensityHover() {
+        if (!densityMapMesh) return;
+        raycaster.setFromCamera(mouse, camera);
+        var hits = raycaster.intersectObject(densityMapMesh);
+        var id = hits.length > 0 ? hits[0].instanceId : -1;
+        if (id === hoveredDensityInstanceId) return;
+        if (hoveredDensityInstanceId !== -1) clearDensityHighlight(densityMapMesh, hoveredDensityInstanceId);
+        hoveredDensityInstanceId = id;
+        if (id !== -1) highlightDensityCell(densityMapMesh, id);
+      }
+
       function showInfo(smooth) {
         if (params.Mode == "Free") {
           if (smooth) {
@@ -766,7 +947,14 @@
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
         if (Math.abs(mouseDownX - event.clientX) > 5 || Math.abs(mouseDownY - event.clientY) > 5) return;
-        
+
+        if (params.showDensity) {
+          if (hoveredDensityInstanceId !== -1 && densityMapMesh) {
+            flyToNearestBrightStarAt(getDensityCellCenter(densityMapMesh, hoveredDensityInstanceId));
+          }
+          return;
+        }
+
         raycaster.setFromCamera(mouse, camera);
         var intersects = raycaster.intersectObjects(clickableObjects);
         if (intersects.length === 0) {
@@ -924,6 +1112,16 @@
         con.position.copy(centerPoint).sub(offset);
       }
 
+      function findVisibleStarMesh(name) {
+        for (var sphere of visibleStars.values()) {
+          if (sphere.name === name) return sphere;
+        }
+        for (var dyn of starCatalog.dynamicEntries()) {
+          if (dyn.mesh.name === name) return dyn.mesh;
+        }
+        return undefined;
+      }
+
       function recenter(object) {
         currentStep = 0;
         animation = ANIMATION.RECENTER;
@@ -934,49 +1132,100 @@
         }
         updateScene(object.position, true);
         refreshStarVisuals();
-        if (camera.position.distanceTo(object.position) > 0.1 && object.text != undefined) {
-          showLabel(object, true);
+        var target = object.apptype != undefined ? object : findVisibleStarMesh(object.name) || object;
+        if (camera.position.distanceTo(target.position) > 0.1 && target.text != undefined) {
+          showLabel(target, true);
         }
-        if (object.apptype == APPTYPE.STAR) {
-          activeStar = object;
-        } else if (object.apptype == APPTYPE.BLACK_HOLE) {
+        if (target.apptype == APPTYPE.STAR) {
+          activeStar = target;
+        } else if (target.apptype == APPTYPE.BLACK_HOLE) {
           activeStar = bh;
         }
         if (object.position.distanceTo(bh.position) > 1000) {
           switchSClusterControls(false);
         }
+        fetchNearbyStars(object.position);
+        fetchStarsAlongPath(recenterStart, object.position);
+      }
+
+      function settleAtStar(star) {
+        if (activeStar != undefined) {
+          showLabel(activeStar, false);
+        }
+        updateScene(star.position, true);
+        refreshStarVisuals();
+        var target = star.apptype != undefined ? star : findVisibleStarMesh(star.name) || star;
+        if (camera.position.distanceTo(target.position) > 0.1 && target.text != undefined) {
+          showLabel(target, true);
+        }
+        if (target.apptype == APPTYPE.STAR) {
+          activeStar = target;
+        } else if (target.apptype == APPTYPE.BLACK_HOLE) {
+          activeStar = bh;
+        }
+        if (star.position.distanceTo(bh.position) > 1000) {
+          switchSClusterControls(false);
+        }
+        fetchNearbyStars(star.position);
+      }
+
+      async function fetchNearbyStars(position, radiusLy = visibleDistance) {
+        const params =
+          "x=" + position.x + "&y=" + position.y + "&z=" + position.z + "&radiusLy=" + radiusLy;
+        try {
+          const [buffer, dictionaries] = await Promise.all([
+            fetch("/api/stars/nearby?" + params).then((res) => res.arrayBuffer()),
+            fetch("/api/dictionaries/nearby?" + params).then((res) => res.json()),
+          ]);
+          starCatalog.addBatch(buffer, dictionaries);
+          updateScene(position, true);
+          refreshStarVisuals();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      function fetchStarsAlongPath(startPos, endPos) {
+        const totalDistance = startPos.distanceTo(endPos);
+        const direction = endPos.clone().sub(startPos).normalize();
+        const waypointRadius = visibleDistance / 2;
+        for (let d = visibleDistance; d < totalDistance; d += visibleDistance) {
+          const waypoint = startPos.clone().addScaledVector(direction, d);
+          fetchNearbyStars(waypoint, waypointRadius);
+        }
       }
 
       async function setupScene() {
         loadStep = 0;
-        updateLoadProgress();
+        updateProgressText();
         scene.traverse(disposeMaterial);
         scene.children.length = 0;
         const constellationLineMaterial = new THREE.LineBasicMaterial({ color: gray });
         await readConstellationData();
         showGalaxyCenter();
-        var urls = [];
-        for (var i = 1; i <= 12; i++) {
-          urls.push("./files/star_data" + i + ".txt");
-        }
-        const filePromises = urls.map((url) =>
-          fetch(url)
-            .then((res) => res.text())
-            .then((text) => { loadStep++; updateLoadProgress(); return text; })
-        );
+        const pinnedBufferPromise = fetch("/api/stars/pinned")
+          .then((res) => res.arrayBuffer())
+          .then((buf) => { loadStep++; updateProgressText(); return buf; });
+        const initialBufferPromise = fetch("/api/stars/initial?maxLy=" + visibleDistance)
+          .then((res) => res.arrayBuffer())
+          .then((buf) => { loadStep++; updateProgressText(); return buf; });
+        const dictionariesPromise = fetch("/api/dictionaries?maxLy=" + visibleDistance)
+          .then((res) => res.json())
+          .then((dict) => { loadStep++; updateProgressText(); return dict; });
         const sClusterPromise = fetch("./files/s_cluster_data.txt")
           .then((res) => res.text())
-          .then((text) => { loadStep++; updateLoadProgress(); return text; });
-        await Promise.all([Promise.all(filePromises), sClusterPromise])
-          .then(async ([texts, sClusterText]) => {
-            // build() keeps only compact typed-array positions for the whole
-            // catalog (millions of stars); the raw file texts stay in memory
-            // as-is (never sliced into one string per star) so a star's full
-            // record can still be recovered on demand via getRawLine()
-            starCatalog.build(texts, (line, position, fileIdx, index) => {
-              var name = line.split("|")[0];
+          .then((text) => { loadStep++; updateProgressText(); return text; });
+        const visibilityConfigPromise = fetch("/api/star-visibility-config")
+          .then((res) => res.json())
+          .then((cfg) => { loadStep++; updateProgressText(); return cfg; });
+        await Promise.all([pinnedBufferPromise, initialBufferPromise, dictionariesPromise, sClusterPromise, visibilityConfigPromise])
+          .then(async ([pinnedBuffer, initialBuffer, dictionaries, sClusterText, fetchedVisibilityConfig]) => {
+            visibilityConfig = fetchedVisibilityConfig;
+            const buffers = [pinnedBuffer, initialBuffer];
+            starCatalog.build(buffers, dictionaries, (position, index) => {
+              var name = starCatalog.getName(index);
               if (controls.target.distanceTo(position) < visibleDistance) {
-                var sphere = createStar(line);
+                var sphere = createStar(starCatalog, index);
                 visibleStars.set(index, sphere);
                 scene.add(sphere);
                 clickableObjects.push(sphere);
@@ -999,8 +1248,7 @@
                 }
               }
             });
-            loadStep++; updateLoadProgress();
-            await new Promise((r) => setTimeout(r, 0));
+            updateLoadProgress();
             for (let data of constellations) {
               const constellationPoints = [];
               for (let star of data) {
@@ -1017,8 +1265,7 @@
               lines.push(line);
               scene.add(line);
             }
-            loadStep++; updateLoadProgress();
-            await new Promise((r) => setTimeout(r, 0));
+            updateLoadProgress();
             // Init S-cluster stars using same geometry/scale as regular stars
             var starGeometry = new THREE.SphereGeometry(1, 6, 6);
             var sElements = SCluster.parse(sClusterText);
@@ -1028,61 +1275,22 @@
               clickableObjects.push(mesh);
               starCatalog.push({ name: mesh.name, data: "", position: mesh.position, mesh: mesh });
             }
-            loadStep++; updateLoadProgress();
-            await new Promise((r) => setTimeout(r, 0));
+
             showLabel(activeStar, true);
-            StarVisuals.init({ scene: scene, camera: camera, controls: controls, stars: currentVisibleMeshes() });
-            loadStep++; updateLoadProgress();
+            StarVisuals.init({ scene: scene, camera: camera, controls: controls, stars: currentVisibleMeshes(), visibilityConfig: visibilityConfig });
+            loadStep++; updateProgressText();
           })
           .catch((e) => console.error(e));
         showInfo(true);
-        initDensities();
         render();
       }
-      
-      function initDensities() {
-        var cellSize = 100.0,
-          bound = 2000.0,
-          matrix = new Array(40);
-        for (let i = 0; i < 40; i++) {
-          matrix[i] = new Array(40);
-          for (let j = 0; j < 40; j++) {
-            matrix[i][j] = new Array(40).fill(0);
-          }
-        }
-        var sx = sun.position.x, sy = sun.position.y, sz = sun.position.z,
-          bound2 = bound * bound,
-          pos = starCatalog.positions;
-        for (var i = 0; i < starCatalog.count; i++) {
-          var ix = i * 3,
-            px = pos[ix], py = pos[ix + 1], pz = pos[ix + 2],
-            dx = px - sx, dy = py - sy, dz = pz - sz;
-          if (dx * dx + dy * dy + dz * dz < bound2) {
-            var x = Math.floor(px / cellSize) + 20;
-            var y = Math.floor(py / cellSize) + 20;
-            var z = Math.floor(pz / cellSize) + 20;
-            matrix[x][y][z] += 1;
-          }
-        }
-        for (let i = 0; i < 40; i++) {
-          for (let j = 0; j < 40; j++) {
-            for (let k = 0; k < 40; k++) {
-              var position = new THREE.Vector3();
-              position.x = (i - 20) * cellSize + cellSize / 2;
-              position.y = (j - 20) * cellSize + cellSize / 2;
-              position.z = (k - 20) * cellSize + cellSize / 2;
-              var clr = matrix[i][j][k] > 2000 ? red
-                                      : matrix[i][j][k] > 1500 ? orange 
-                                                  : matrix[i][j][k] > 1000 ? yellow : white;
-              if (matrix[i][j][k] != 0) {
-                var label = createLabel(matrix[i][j][k] + "", 4.0, position, clr);
-                densities.push(label);
-              }
-            }
-          }
-        }
+
+      async function updateLoadProgress() {
+        loadStep++;
+        updateProgressText();
+        await new Promise((r) => setTimeout(r, 0));
       }
-      
+
       function showGalaxyCenter() {
         var pos = new THREE.Vector3().setFromSphericalCoords(26996, 2.077078, 4.649851);
         bh = BlackHole.create(scene, pos, 0.005);
@@ -1105,51 +1313,33 @@
         return false;
       }
       
-      function createStar(star) {
-        var params = star.split("|"),
-          color = new THREE.Color(),
-          name = params[0],
-          spectralType = params[4];
+      function createStar(catalog, index) {
+        var color = new THREE.Color(),
+          name = catalog.getName(index),
+          spectralType = catalog.getSpectralType(index);
         color.setHex(getColorBySpectralType(spectralType));
         var material = new THREE.MeshBasicMaterial({ color: color }),
-          sphere = new THREE.Mesh(starGeometry, material),
-          ly = plxToLy(params[3]);
-        if (params[0] === "Sun") {
-          ly = 0.0;
+          sphere = new THREE.Mesh(starGeometry, material);
+        catalog.getPosition(index, sphere.position);
+        if (name === "Sun") {
           sun = sphere;
           activeStar = sphere;
         }
-        var coord = params[2].split(" "),
-          fi = degreesToRad(coord[0]),
-          theta = degreesToRad(coord[1]);
-        sphere.position.setFromSphericalCoords(ly, Math.PI / 2 - theta, fi);
         sphere.name = name;
         var secondName = starNames.find((star) => star.code == name);
         if (secondName != null) {
           sphere.secondName = secondName.name;
         }
-        var size = params[5];
-        if (size !== undefined && size.length != 0) {
-          if (size.endsWith("km")) {
-            size = Number(size.split(" ")[0] / SUN_DIAMETER);
-          } else if (size.endsWith("mas")) {
-            size = Number(size.split(" ")[0]);
-          } else {
-            size = "NA";
-          }
-        } else {
-          size = "NA";
-        }
-        if (size == "NA") {
-          sphere.scale.setScalar(DEFAULT_RADIUS);
-        } else {
-          sphere.scale.setScalar(DEFAULT_RADIUS * Math.pow(size, 0.25));
-        }
+
+        var size = catalog.getDiameterSolar(index);
+        if (!(size > 0)) size = "NA";
+        sphere.scale.setScalar(DEFAULT_RADIUS);
         sphere.apptype = APPTYPE.STAR;
         sphere.initialscale = sphere.scale.x;
         sphere.spectralClass = spectralType ? (spectralType.match(/[OBAFGKMLTYXWDC]/) || [""])[0] : "";
         sphere.spectralType  = spectralType || "";
-        sphere.text = ly.toFixed(0) + " ly. Type " + params[1] + " Class " + spectralType + 
+        var ly = sphere.position.length();
+        sphere.text = ly.toFixed(0) + " ly. Type " + catalog.getOtype(index) + " Class " + spectralType +
           (typeof size == "number" && size.toFixed(0) > 1 ? ". " + size.toFixed(0) + " Sun radii" : "");
         if (sphere == sun) {
           sphere.text = "Class " + spectralType;
@@ -1258,7 +1448,7 @@
               }
               constellations.push(listOfStars);
             }
-            loadStep++; updateLoadProgress();
+            loadStep++; updateProgressText();
           })
           .catch((e) => console.error(e));
         const p2 = fetch("./files/constellations.txt")
@@ -1302,7 +1492,7 @@
                 if (groupId > 5) break;
               }
             }
-            loadStep++; updateLoadProgress();
+            loadStep++; updateProgressText();
           })
           .catch((e) => console.error(e));
         return Promise.all([p1, p2]);
@@ -1363,7 +1553,9 @@
 
       function tickConsSwap() {
         currentStep++;
-        var spinAngle = (10 * Math.PI) * (currentStep / animationSteps);
+        var t = currentStep / animationSteps;
+        var ease = (1 - Math.cos(Math.PI * t)) / 2;
+        var spinAngle = (10 * Math.PI) * ease;
         positionLabelOnEllipse(chosenCon, chosenConSteps[animationSteps - currentStep], spinAngle);
         positionLabelOnEllipse(pairCon, pairConSteps[currentStep], spinAngle);
         if (currentStep >= animationSteps) {
@@ -1488,9 +1680,8 @@
           if (obj.apptype == APPTYPE.STAR) {
             var distance = obj.position.distanceTo(camera.position);
             if (distance < 0.001) continue;
-            var sc = obj.spectralClass || '_default';
-            var hideMaxDist = starHideMaxDist[sc] ?? starHideMaxDist['_default'];
-            if (hideMaxDist !== undefined && distance > hideMaxDist) {
+            var hideMaxDist = maxVisibilityDistance(obj.spectralType, visibilityConfig);
+            if (distance > hideMaxDist) {
               obj.material.colorWrite = false;
               obj.material.depthWrite = false;
               continue;
@@ -1529,31 +1720,22 @@
             var ix = i * 3,
               dx = pos[ix] - px, dy = pos[ix + 1] - py, dz = pos[ix + 2] - pz;
             if (dx * dx + dy * dy + dz * dz < r2) {
-              var sphere = createStar(starCatalog.getRawLine(i));
+              var sphere = createStar(starCatalog, i);
               visibleStars.set(i, sphere);
               scene.add(sphere);
               clickableObjects.push(sphere);
-              if (sphere.name == foundStar) {
-                activeStar = sphere;
-                showLabel(sphere, true);
-                foundStar = undefined;
-              }
             }
           }
           for (var dyn of starCatalog.dynamicEntries()) {
             if (dyn.position.distanceTo(position) < visibleDistance && !clickableObjects.includes(dyn.mesh)) {
               scene.add(dyn.mesh);
               clickableObjects.push(dyn.mesh);
-              if (dyn.mesh.name == foundStar) {
-                activeStar = dyn.mesh;
-                showLabel(dyn.mesh, true);
-                foundStar = undefined;
-              }
             }
           }
         } else {
           for (var [idx, sphere] of visibleStars) {
-            if (sphere.position.distanceTo(position) > visibleDistance) {
+            var keepMaxDist = maxVisibilityDistance(sphere.spectralType, visibilityConfig);
+            if (sphere.position.distanceTo(position) > keepMaxDist) {
               scene.remove(sphere);
               disposeMaterial(sphere);
               visibleStars.delete(idx);
@@ -1567,15 +1749,6 @@
               var ci = clickableObjects.indexOf(dyn.mesh);
               if (ci !== -1) clickableObjects.splice(ci, 1);
             }
-          }
-        }
-
-        for (var density of densities) {
-          if (show && params.showDensity && density.position.distanceTo(position) < 500) {
-            scene.add(density);
-          }
-          if (!show && density.position.distanceTo(position) > 500) {
-            scene.remove(density);
           }
         }
 

@@ -2,9 +2,12 @@ import { describe, test, expect } from 'vitest';
 import {
   plxToLy,
   degreesToRad,
-  parseStarFields,
   getSpectralClass,
   lumClassMult,
+  giantBrightnessMult,
+  angularDiameterToKm,
+  teffToSpectralClass,
+  bpRpToTeff,
 } from '../utils.js';
 
 // ── plxToLy ───────────────────────────────────────────────────────────────────
@@ -49,35 +52,24 @@ describe('degreesToRad', () => {
   });
 });
 
-// ── parseStarFields ───────────────────────────────────────────────────────────
-describe('parseStarFields', () => {
-  test('parses all fields from a standard data line', () => {
-    const line = 'HD 235588|*|325.1826637300200 +52.0960041963100|4.1069|A5|';
-    const r = parseStarFields(line);
-    expect(r.name).toBe('HD 235588');
-    expect(r.type).toBe('*');
-    expect(r.coords).toBe('325.1826637300200 +52.0960041963100');
-    expect(r.plx).toBeCloseTo(4.1069);
-    expect(r.spectralType).toBe('A5');
+// ── angularDiameterToKm ─────────────────────────────────────────────────────────
+describe('angularDiameterToKm', () => {
+  test('scales linearly with angular diameter', () => {
+    const a = angularDiameterToKm(10, 100);
+    const b = angularDiameterToKm(20, 100);
+    expect(b).toBeCloseTo(a * 2);
   });
 
-  test('parses a binary star entry', () => {
-    const line = 'HD 235593|**|325.5258729 +53.3593775|3.66|F2|';
-    const r = parseStarFields(line);
-    expect(r.type).toBe('**');
-    expect(r.plx).toBeCloseTo(3.66);
-    expect(r.spectralType).toBe('F2');
+  test('scales linearly with distance', () => {
+    const a = angularDiameterToKm(10, 100);
+    const b = angularDiameterToKm(10, 200);
+    expect(b).toBeCloseTo(a * 2);
   });
 
-  test('handles missing size field gracefully', () => {
-    const line = 'TestStar|*|10.0 +20.0|5.0|G2V|';
-    const r = parseStarFields(line);
-    expect(r.size).toBe('');
-  });
-
-  test('name is first pipe-separated field', () => {
-    const line = 'Sun|*|000.0 +00.0|0|G2V|1 km';
-    expect(parseStarFields(line).name).toBe('Sun');
+  test('roughly matches Betelgeuse\'s known scale (~50 mas at ~550 ly, a few AU across)', () => {
+    const km = angularDiameterToKm(50, 550);
+    expect(km).toBeGreaterThan(5e8);
+    expect(km).toBeLessThan(3e9);
   });
 });
 
@@ -97,6 +89,11 @@ describe('getSpectralClass', () => {
 
   test('extracts K from K5III', () => {
     expect(getSpectralClass('K5III')).toBe('K');
+  });
+
+  test('maps LBV (Luminous Blue Variable) to B, not the brown-dwarf L', () => {
+    expect(getSpectralClass('LBV')).toBe('B');
+    expect(getSpectralClass('LBVe')).toBe('B');
   });
 
   test('returns empty string for null', () => {
@@ -148,5 +145,84 @@ describe('lumClassMult', () => {
   test('III is not matched as II (no false positive)', () => {
     // K5III must give 1.4 (III), not 1.6 (II)
     expect(lumClassMult('K5III')).toBe(1.4);
+  });
+});
+
+// ── giantBrightnessMult ───────────────────────────────────────────────────────
+describe('giantBrightnessMult', () => {
+  test('Ia supergiants → 2.0', () => {
+    expect(giantBrightnessMult('M1-M2Ia-Iab')).toBe(2.0);
+    expect(giantBrightnessMult('K5Ia')).toBe(2.0);
+  });
+
+  test('Ib bright supergiants → 1.8', () => {
+    expect(giantBrightnessMult('K5Ib')).toBe(1.8);
+  });
+
+  test('II bright giants → 1.6', () => {
+    expect(giantBrightnessMult('G8II')).toBe(1.6);
+  });
+
+  test('III giants → 1.4', () => {
+    expect(giantBrightnessMult('K5III')).toBe(1.4);
+    expect(giantBrightnessMult('G8III')).toBe(1.4);
+  });
+
+  test('IV subgiants → 1.2', () => {
+    expect(giantBrightnessMult('A1IV')).toBe(1.2);
+  });
+
+  test('V main sequence → 1.0', () => {
+    expect(giantBrightnessMult('G2V')).toBe(1.0);
+    expect(giantBrightnessMult('A5')).toBe(1.0);
+  });
+
+  test('empty string → 1.0', () => {
+    expect(giantBrightnessMult('')).toBe(1.0);
+  });
+
+  test('null → 1.0', () => {
+    expect(giantBrightnessMult(null)).toBe(1.0);
+  });
+});
+
+// ── teffToSpectralClass ──────────────────────────────────────────────────────
+describe('teffToSpectralClass', () => {
+  test('Sun-like Teff (5778K) → G2', () => {
+    expect(teffToSpectralClass(5778)).toBe('G2');
+  });
+
+  test('boundary values fall in the expected class', () => {
+    expect(teffToSpectralClass(9000)).toMatch(/^A/);
+    expect(teffToSpectralClass(6500)).toMatch(/^F/);
+    expect(teffToSpectralClass(4500)).toMatch(/^K/);
+    expect(teffToSpectralClass(3200)).toMatch(/^M/);
+  });
+
+  test('very hot clamps to O0, very cool clamps to M9', () => {
+    expect(teffToSpectralClass(100000)).toBe('O0');
+    expect(teffToSpectralClass(1000)).toBe('M9');
+  });
+
+  test('non-positive or missing Teff → null', () => {
+    expect(teffToSpectralClass(0)).toBeNull();
+    expect(teffToSpectralClass(-500)).toBeNull();
+    expect(teffToSpectralClass(NaN)).toBeNull();
+  });
+});
+
+// ── bpRpToTeff ────────────────────────────────────────────────────────────────
+describe('bpRpToTeff', () => {
+  test("Sun's B-V (0.65) reproduces the Sun's Teff (calibration point)", () => {
+    expect(bpRpToTeff(0.65)).toBeCloseTo(5778, 0);
+  });
+
+  test('redder (larger) color → cooler Teff', () => {
+    expect(bpRpToTeff(2.0)).toBeLessThan(bpRpToTeff(0.5));
+  });
+
+  test('non-finite input → null', () => {
+    expect(bpRpToTeff(NaN)).toBeNull();
+    expect(bpRpToTeff(undefined)).toBeNull();
   });
 });

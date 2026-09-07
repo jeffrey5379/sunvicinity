@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { lumClassMult } from "./utils.js";
+import { lumClassMult, giantBrightnessMult, maxVisibilityDistance } from "./utils.js";
 
 // ══════════════════════════════════════════════════════════════════════════════
 //  PARAMETERS — edit these to tune the visual appearance
@@ -32,18 +32,14 @@ const StarVisualsConfig = {
   spikeFadeBelow: 5.0, // ly — spikes fade out smoothly at camera distance <= this value
 
   // ── Per-class parameters ─────────────────────────────────────────────────────
-  // brightness: multiplier on raw mesh-scale brightness (0.0–2.0)
-  // glowMaxDist: ly at which the far glow fades out completely
-  // noGlow: skip the far _points halo for this class
-  // noCoreDisk: use corona/shell glow instead of a solid core disk (close pool)
   spectralParameters: {
-    O: { brightness: 2.0, glowMaxDist: 300.0 },
-    B: { brightness: 1.7, glowMaxDist: 300.0 },
-    A: { brightness: 1.4, glowMaxDist:  200.0 },
-    F: { brightness: 1.2, glowMaxDist:  200.0 },
-    G: { brightness: 0.9, glowMaxDist:  150.0 },
-    K: { brightness: 0.7, glowMaxDist:  100.0 },
-    M: { brightness: 0.4, glowMaxDist:  30.0, noCoreDisk: true },
+    O: { brightness: 2.1 },
+    B: { brightness: 1.8 },
+    A: { brightness: 1.5 },
+    F: { brightness: 1.2 },
+    G: { brightness: 0.8 },
+    K: { brightness: 0.6 },
+    M: { brightness: 0.4, noCoreDisk: true },
     C: { brightness: 0.2, noGlow: true, noCoreDisk: true },
     L: { brightness: 0.1, noGlow: true, noCoreDisk: true },
     T: { brightness: 0.1, noGlow: true, noCoreDisk: true },
@@ -58,6 +54,10 @@ const StarVisualsConfig = {
 const StarVisuals = (() => {
   // ── State ─────────────────────────────────────────────────────────────────────
   let _scene, _camera, _controls;
+  // { <class letter>: { glowMaxDist?, noGlow? }, defaultGlowMaxDist, closeRangeLy }
+  // — fetched by index.html from GET /api/star-visibility-config and passed
+  // into init(); see maxVisibilityDistance in utils.js for how it's used.
+  let _visibilityConfig = null;
   let _points = null;
   let _uniforms = null;
   const _lastTargetPos = new THREE.Vector3(Infinity);
@@ -66,7 +66,7 @@ const StarVisuals = (() => {
   // ── Close-star state ──────────────────────────────────────────────────────────
   const _glowStarData = [];
   const _closePool = [];
-  const CLOSE_POOL_SIZE = 16;
+  const CLOSE_POOL_SIZE = 32;
 
   // ── Shaders ───────────────────────────────────────────────────────────────────
 
@@ -365,10 +365,11 @@ const StarVisuals = (() => {
         spTable[spectralClass] !== undefined
           ? spTable[spectralClass]
           : spTable["_default"];
+      const brightnessLumMult = isGiant ? giantBrightnessMult(mesh.spectralType || "") : 1.0;
       // No upper clamp: brightness is bounded downstream by the shader's own
       // alpha/color clamps (visuals.js VERT/FRAG), so the brightest stars can
       // bloom further instead of being hard-capped at the same value.
-      const brightness = Math.max(0.05, rawBright * spEntry.brightness);
+      const brightness = Math.max(0.05, rawBright * spEntry.brightness * brightnessLumMult);
 
       let r = 1.0, g = 0.929, b = 0.784;
       if (mesh.material && mesh.material.color) {
@@ -390,8 +391,7 @@ const StarVisuals = (() => {
       positions.push(mesh.position.x, mesh.position.y, mesh.position.z);
       brightnesses.push(brightness);
       colors.push(r, g, b);
-      const glowMaxDist =
-        (spEntry && spEntry.glowMaxDist != null ? spEntry.glowMaxDist : 500.0) * lumMult;
+      const glowMaxDist = maxVisibilityDistance(mesh.spectralType || "", _visibilityConfig);
       // Negative glowMaxDist signals dynamic (S-cluster) star to the VERT shader.
       glowMaxDists.push(mesh.dynamicPosition ? -glowMaxDist : glowMaxDist);
     }
@@ -540,10 +540,11 @@ const StarVisuals = (() => {
   }
 
   // ── Public API ────────────────────────────────────────────────────────────────
-  function init({ scene, camera, controls, stars }) {
+  function init({ scene, camera, controls, stars, visibilityConfig }) {
     _scene = scene;
     _camera = camera;
     _controls = controls || null;
+    _visibilityConfig = visibilityConfig;
     build(stars);
     _buildCloseMesh();
   }

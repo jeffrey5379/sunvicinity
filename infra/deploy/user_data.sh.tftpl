@@ -1,0 +1,112 @@
+#!/bin/bash
+# First-boot provisioning for the sunvicinity EC2 instance. Runs once, as
+# root, via cloud-init. Everything it does is re-doable: a fresh `terraform
+# apply` after `destroy` gives a clean instance that repeats these steps.
+set -euxo pipefail
+exec > >(tee /var/log/sunvicinity-bootstrap.log) 2>&1
+
+APP_DIR=/opt/sunvicinity
+DB_BUCKET="${db_bucket}"
+DB_KEY="${db_key}"
+REPO_URL="${repo_url}"
+REPO_BRANCH="${repo_branch}"
+
+# --- packages ---------------------------------------------------------------
+# gcc-c++/make/python3: only used if better-sqlite3 has no prebuilt binary
+# for this Node/arch and falls back to compiling from source.
+dnf install -y git tar gcc-c++ make python3
+
+# Node 22 (AL2023 default repos ship older; the app needs >=22).
+curl -fsSL https://rpm.nodesource.com/setup_22.x | bash -
+dnf install -y nodejs
+
+# Caddy as a single static binary, architecture-matched — no third-party repo.
+ARCH=$(uname -m)
+case "$ARCH" in
+  aarch64) CADDY_ARCH=arm64 ;;
+  x86_64)  CADDY_ARCH=amd64 ;;
+  *) echo "unsupported arch $ARCH" >&2; exit 1 ;;
+esac
+curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=$CADDY_ARCH" -o /usr/local/bin/caddy
+chmod +x /usr/local/bin/caddy
+
+# --- app ------------------------------------------------------------------
+id sunvicinity &>/dev/null || useradd --system --home-dir "$APP_DIR" --shell /sbin/nologin sunvicinity
+
+git clone --depth 1 --branch "$REPO_BRANCH" "$REPO_URL" "$APP_DIR"
+cd "$APP_DIR"
+
+# 17 GB, same region as the bucket => free transfer, ~2-3 min on gp3.
+# openDb() expects it at scripts/stardata.db (scripts/db.js DEFAULT_DB_PATH).
+aws s3 cp "s3://$DB_BUCKET/$DB_KEY" "$APP_DIR/scripts/stardata.db"
+
+npm ci
+npm run build   # -> dist/ (needs devDependencies, hence plain `npm ci`)
+
+chown -R sunvicinity:sunvicinity "$APP_DIR"
+
+# --- reverse proxy ------------------------------------------------------------
+# vite builds with base "/sunvicinity/", so the static bundle lives under that
+# path; the client's fetch() calls are rooted at "/api". HTTP only — there's no
+# domain to get a cert for. Add TLS later by pointing a name here and switching
+# the site address to that name (Caddy then provisions a cert automatically).
+mkdir -p /etc/caddy
+cat > /etc/caddy/Caddyfile <<'EOF'
+:80 {
+	encode gzip
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:3001
+	}
+
+	handle_path /sunvicinity/* {
+		root * /opt/sunvicinity/dist
+		file_server
+	}
+
+	redir / /sunvicinity/ permanent
+}
+EOF
+
+# --- services --------------------------------------------------------------
+cat > /etc/systemd/system/sunvicinity.service <<'EOF'
+[Unit]
+Description=sunvicinity API server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sunvicinity
+WorkingDirectory=/opt/sunvicinity
+Environment=NODE_ENV=production
+Environment=PORT=3001
+ExecStart=/usr/bin/node server/index.js
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat > /etc/systemd/system/caddy.service <<'EOF'
+[Unit]
+Description=Caddy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now sunvicinity.service
+systemctl enable --now caddy.service
+
+echo "sunvicinity bootstrap complete"

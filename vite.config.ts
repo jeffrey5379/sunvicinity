@@ -6,6 +6,11 @@ export default defineConfig(({ command }) => ({
   build: {
     target: 'esnext',
   },
+  server: {
+    proxy: {
+      '/api': 'http://localhost:3001',
+    },
+  },
   plugins: [
     {
       name: 'copy-static-assets',

@@ -1,91 +1,216 @@
 import * as THREE from "three";
-import { plxToLy, degreesToRad } from "./utils.js";
 
-// Compact structure-of-arrays catalog for the full star dataset (millions of
-// records). Only x/y/z positions are kept permanently, as typed arrays —
-// name/spectral-type/size are recovered on demand by slicing the raw text
-// lines, which are kept once (never duplicated per star, never copied into
-// per-star strings). This is what makes holding the *entire* catalog in
-// memory cheap enough to do unconditionally, so a search/agent jump anywhere
-// in the dataset never needs to re-fetch or re-scan the source files.
+const HEADER_FIELDS = 9;
+const utf8Decoder = new TextDecoder();
+const GENERATED_NAME_PATTERN = /^gaia dr3 \d+$/;
+
 export class StarCatalog {
   constructor() {
     this.count = 0;
+    this._capacity = 0;
     this.positions = new Float32Array(0);
-    this._fileIndex = new Uint8Array(0);
-    this._byteOffset = new Uint32Array(0);
-    this._fileTexts = [];
-    // S-cluster / other mesh-backed entries: { name, data, position, mesh }.
-    // These are few (dozens), so keeping them as plain objects is fine.
+    this._batchIndex = new Uint16Array(0);
+    this._localIndex = new Uint32Array(0);
+    this._batches = [];
+    this._otypes = [];
+    this._spectralTypes = [];
+    this._otypeIndexByName = new Map();
+    this._spectralTypeIndexByName = new Map();
     this._dynamic = [];
+    this._nameIndex = Object.create(null);
+    this._allNames = Object.create(null);
   }
 
-  // Parses every "name|type|ra dec|plx|spectral|size" line across all given
-  // raw file texts and indexes it. onCandidate(line, position, fileIdx, index),
-  // if given, is invoked for every parsed record — index is its final index
-  // into this catalog (stable, usable as a Map key) — so the caller can
-  // decide whether to materialize a visible star for it right away.
-  build(texts, onCandidate) {
+  _internOtype(name) {
+    let index = this._otypeIndexByName.get(name);
+    if (index === undefined) {
+      index = this._otypes.length;
+      this._otypes.push(name);
+      this._otypeIndexByName.set(name, index);
+    }
+    return index;
+  }
+
+  _internSpectralType(name) {
+    let index = this._spectralTypeIndexByName.get(name);
+    if (index === undefined) {
+      index = this._spectralTypes.length;
+      this._spectralTypes.push(name);
+      this._spectralTypeIndexByName.set(name, index);
+    }
+    return index;
+  }
+
+  _ensureCapacity(additionalCount) {
+    const needed = this.count + additionalCount;
+    if (needed <= this._capacity) return;
+    const newCapacity = Math.max(needed, this._capacity * 2);
+
+    const newPositions = new Float32Array(newCapacity * 3);
+    newPositions.set(this.positions.subarray(0, this.count * 3));
+    const newBatchIndex = new Uint16Array(newCapacity);
+    newBatchIndex.set(this._batchIndex.subarray(0, this.count));
+    const newLocalIndex = new Uint32Array(newCapacity);
+    newLocalIndex.set(this._localIndex.subarray(0, this.count));
+
+    this.positions = newPositions;
+    this._batchIndex = newBatchIndex;
+    this._localIndex = newLocalIndex;
+    this._capacity = newCapacity;
+  }
+
+  build(buffers, dictionaries, onCandidate) {
+    this._otypes = dictionaries.otypes.slice();
+    this._otypeIndexByName = new Map(this._otypes.map((name, i) => [name, i]));
+    this._spectralTypes = dictionaries.spectralTypes.slice();
+    this._spectralTypeIndexByName = new Map(this._spectralTypes.map((name, i) => [name, i]));
+    this._batches = [];
+    this._nameIndex = Object.create(null);
+    this._allNames = Object.create(null);
+
     const positionsArr = [];
-    const fileIndexArr = [];
-    const byteOffsetArr = [];
+    const batchIndexArr = [];
+    const localIndexArr = [];
+    this._batchIndex = batchIndexArr;
+    this._localIndex = localIndexArr;
+    this.positions = positionsArr;
     const scratch = new THREE.Vector3();
 
-    for (let f = 0; f < texts.length; f++) {
-      const text = texts[f];
-      let start = 0;
-      const len = text.length;
-      while (start < len) {
-        let end = text.indexOf("\n", start);
-        if (end === -1) end = len;
-        if (end > start) {
-          const line = text.substring(start, end);
-          if (this._parsePosition(line, scratch)) {
-            const index = fileIndexArr.length;
-            fileIndexArr.push(f);
-            byteOffsetArr.push(start);
-            positionsArr.push(scratch.x, scratch.y, scratch.z);
-            if (onCandidate) onCandidate(line, scratch, f, index);
-          }
-        }
-        start = end + 1;
+    for (let b = 0; b < buffers.length; b++) {
+      const buffer = buffers[b];
+      const header = new Uint32Array(buffer, 0, HEADER_FIELDS);
+      const [
+        count,
+        ,
+        positionsOffset,
+        otypeCodeOffset,
+        spectralTypeIndexOffset,
+        nameOffsetsOffset,
+        namesBlobOffset,
+        namesBlobLength,
+        diameterSolarOffset,
+      ] = header;
+
+      const positions = new Float32Array(buffer, positionsOffset, count * 3);
+      const batch = {
+        otypeCode: new Uint16Array(buffer, otypeCodeOffset, count),
+        spectralTypeIndex: new Uint16Array(buffer, spectralTypeIndexOffset, count),
+        nameOffsets: new Uint32Array(buffer, nameOffsetsOffset, count + 1),
+        namesBlob: new Uint8Array(buffer, namesBlobOffset, namesBlobLength),
+        diameterSolar: new Float32Array(buffer, diameterSolarOffset, count),
+      };
+      this._batches.push(batch);
+
+      for (let local = 0; local < count; local++) {
+        scratch.set(positions[local * 3], positions[local * 3 + 1], positions[local * 3 + 2]);
+        const index = batchIndexArr.length;
+        batchIndexArr.push(b);
+        localIndexArr.push(local);
+        positionsArr.push(scratch.x, scratch.y, scratch.z);
+        // getName(index) already resolves correctly here — _batchIndex/
+        // _localIndex were assigned by reference before this loop started
+        // (see the comment above), same reasoning onCandidate below relies on.
+        // Generated "Gaia DR3 <id>" names are skipped — see
+        // GENERATED_NAME_PATTERN's comment.
+        const indexedName = this.getName(index).toLowerCase().trim();
+        this._allNames[indexedName] = index;
+        if (!GENERATED_NAME_PATTERN.test(indexedName)) this._nameIndex[indexedName] = index;
+        if (onCandidate) onCandidate(scratch, index);
       }
     }
 
-    this.count = fileIndexArr.length;
+    this.count = batchIndexArr.length;
     this.positions = Float32Array.from(positionsArr);
-    this._fileIndex = Uint8Array.from(fileIndexArr);
-    this._byteOffset = Uint32Array.from(byteOffsetArr);
-    this._fileTexts = texts;
+    this._batchIndex = Uint16Array.from(batchIndexArr);
+    this._localIndex = Uint32Array.from(localIndexArr);
+    this._capacity = this.count;
   }
 
-  _parsePosition(line, target) {
-    const params = line.split("|");
-    if (params.length < 4 || !params[2]) return false;
-    const coord = params[2].split(" ");
-    if (coord.length < 2) return false;
-    const ly = plxToLy(params[3]);
-    const fi = degreesToRad(coord[0]);
-    const theta = degreesToRad(coord[1]);
-    target.setFromSphericalCoords(ly, Math.PI / 2 - theta, fi);
-    return true;
-  }
+  addBatch(buffer, dictionaries, onCandidate) {
+    const otypeRemap = dictionaries.otypes.map((name) => this._internOtype(name));
+    const spectralTypeRemap = dictionaries.spectralTypes.map((name) => this._internSpectralType(name));
 
-  // Recovers the original raw line for record i — the only place the full
-  // text is ever reconstituted, and only for the handful of records that
-  // are actually looked up (a star becoming visible, a search hit, ...).
-  getRawLine(i) {
-    const text = this._fileTexts[this._fileIndex[i]];
-    const start = this._byteOffset[i];
-    let end = text.indexOf("\n", start);
-    if (end === -1) end = text.length;
-    return text.substring(start, end);
+    const header = new Uint32Array(buffer, 0, HEADER_FIELDS);
+    const [
+      count,
+      ,
+      positionsOffset,
+      otypeCodeOffset,
+      spectralTypeIndexOffset,
+      nameOffsetsOffset,
+      namesBlobOffset,
+      namesBlobLength,
+      diameterSolarOffset,
+    ] = header;
+
+    const positions = new Float32Array(buffer, positionsOffset, count * 3);
+    const otypeCode = new Uint16Array(buffer, otypeCodeOffset, count);
+    const spectralTypeIndex = new Uint16Array(buffer, spectralTypeIndexOffset, count);
+    const nameOffsets = new Uint32Array(buffer, nameOffsetsOffset, count + 1);
+    const namesBlob = new Uint8Array(buffer, namesBlobOffset, namesBlobLength);
+    const diameterSolar = new Float32Array(buffer, diameterSolarOffset, count);
+
+    const keptLocals = [];
+    for (let local = 0; local < count; local++) {
+      const name = utf8Decoder.decode(namesBlob.subarray(nameOffsets[local], nameOffsets[local + 1]));
+      const key = name.toLowerCase().trim();
+      if (!(key in this._allNames)) keptLocals.push(local);
+    }
+    if (keptLocals.length === 0) return;
+
+    for (const local of keptLocals) {
+      otypeCode[local] = otypeRemap[otypeCode[local]];
+      spectralTypeIndex[local] = spectralTypeRemap[spectralTypeIndex[local]];
+    }
+
+    const batchIdx = this._batches.length;
+    this._batches.push({ otypeCode, spectralTypeIndex, nameOffsets, namesBlob, diameterSolar });
+
+    const startIndex = this.count;
+    this._ensureCapacity(keptLocals.length);
+
+    const scratch = new THREE.Vector3();
+    keptLocals.forEach((local, offset) => {
+      const index = startIndex + offset;
+      this._batchIndex[index] = batchIdx;
+      this._localIndex[index] = local;
+      this.positions[index * 3] = positions[local * 3];
+      this.positions[index * 3 + 1] = positions[local * 3 + 1];
+      this.positions[index * 3 + 2] = positions[local * 3 + 2];
+    });
+
+    this.count = startIndex + keptLocals.length;
+
+    keptLocals.forEach((local, offset) => {
+      const index = startIndex + offset;
+      const indexedName = this.getName(index).toLowerCase().trim();
+      this._allNames[indexedName] = index;
+      if (!GENERATED_NAME_PATTERN.test(indexedName)) this._nameIndex[indexedName] = index;
+      if (onCandidate) onCandidate(this.getPosition(index, scratch), index);
+    });
   }
 
   getName(i) {
-    const line = this.getRawLine(i);
-    const sep = line.indexOf("|");
-    return sep === -1 ? line : line.substring(0, sep);
+    const batch = this._batches[this._batchIndex[i]];
+    const local = this._localIndex[i];
+    const start = batch.nameOffsets[local];
+    const end = batch.nameOffsets[local + 1];
+    return utf8Decoder.decode(batch.namesBlob.subarray(start, end));
+  }
+
+  getOtype(i) {
+    const batch = this._batches[this._batchIndex[i]];
+    return this._otypes[batch.otypeCode[this._localIndex[i]]] || "";
+  }
+
+  getSpectralType(i) {
+    const batch = this._batches[this._batchIndex[i]];
+    return this._spectralTypes[batch.spectralTypeIndex[this._localIndex[i]]] || "";
+  }
+
+  getDiameterSolar(i) {
+    const batch = this._batches[this._batchIndex[i]];
+    return batch.diameterSolar[this._localIndex[i]];
   }
 
   getPosition(i, target = new THREE.Vector3()) {
@@ -97,13 +222,14 @@ export class StarCatalog {
   // record shape — built only for the single record being inspected, never
   // retained, so it never re-introduces the per-star object/string cost.
   _viewAt(i) {
-    const getName = this.getName.bind(this, i);
-    const getRawLine = this.getRawLine.bind(this, i);
-    const getPosition = this.getPosition.bind(this, i);
     return {
-      get name() { return getName(); },
-      get data() { return getRawLine(); },
-      get position() { return getPosition(); },
+      get name() { return this._catalog.getName(this._index); },
+      get otype() { return this._catalog.getOtype(this._index); },
+      get spectralType() { return this._catalog.getSpectralType(this._index); },
+      get position() { return this._catalog.getPosition(this._index); },
+      get diameterSolar() { return this._catalog.getDiameterSolar(this._index); },
+      _catalog: this,
+      _index: i,
     };
   }
 
@@ -113,6 +239,17 @@ export class StarCatalog {
 
   dynamicEntries() {
     return this._dynamic;
+  }
+
+  findByName(name) {
+    if (!name) return undefined;
+    const key = name.toLowerCase().trim();
+    const index = this._nameIndex[key];
+    if (index !== undefined) return this._viewAt(index);
+    for (let i = 0; i < this.count; i++) {
+      if (this.getName(i).toLowerCase().trim() === key) return this._viewAt(i);
+    }
+    return this._dynamic.find((d) => d.name && d.name.toLowerCase().trim() === key);
   }
 
   find(predicate) {
