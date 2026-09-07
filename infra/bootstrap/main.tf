@@ -1,16 +1,3 @@
-# Persistent state that must OUTLIVE the deploy/destroy cycle: a private S3
-# bucket holding the ~17 GB stardata.db. Everything in ../deploy is created
-# by `terraform apply` and removed by `terraform destroy`; this bucket is
-# the one thing that stays between sessions (S3 Standard for 17 GB is
-# ~$0.40/month), so the instance can re-pull the DB on each fresh boot
-# instead of you re-uploading 17 GB every time.
-#
-# Run once:
-#   terraform init && terraform apply
-#   <then run the `upload_command` output, once, ~17 GB one-time upload>
-# You only ever come back here to change the DB (rebuild -> re-upload) or to
-# tear the bucket down for good (`terraform destroy`).
-
 terraform {
   required_version = ">= 1.5"
   required_providers {
@@ -30,8 +17,6 @@ resource "random_id" "suffix" {
 
 resource "aws_s3_bucket" "artifacts" {
   bucket = "sunvicinity-${random_id.suffix.hex}"
-  # Lets `terraform destroy` remove the bucket even with stardata.db still
-  # in it — there's no backup to protect (you have the source DB locally).
   force_destroy = true
 }
 

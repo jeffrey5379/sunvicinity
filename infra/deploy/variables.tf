@@ -6,13 +6,14 @@ variable "region" {
 
 variable "instance_type" {
   description = <<-EOT
-    Graviton/ARM by default (cheapest for this workload). t4g.large = 2 vCPU / 8 GB,
-    ~$0.067/hr on-demand. Bump to t4g.xlarge (16 GB) if query latency is poor — more
-    of the 17 GB DB stays in the OS page cache. x86 types (t3.*) also work; the AMI
-    architecture follows the type automatically.
+    Graviton/ARM by default. t4g.2xlarge = 8 vCPU / 32 GB, ~$0.27/hr on-demand:
+    32 GB holds the whole 17 GB DB in the OS page cache (the main lever on query
+    latency), and 8 vCPUs feed the server's query-worker pool (QUERY_WORKERS,
+    default = vCPU count). t4g.xlarge (4 vCPU / 16 GB) is ~half the cost and still
+    fine for light use. x86 types (t3.*) also work; the AMI follows the type.
   EOT
   type        = string
-  default     = "t4g.large"
+  default     = "t4g.2xlarge"
 }
 
 variable "root_volume_gb" {

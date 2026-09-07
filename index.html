@@ -230,11 +230,12 @@
           camera.position.add(move);
           controls.target.add(move);
           camera.lookAt(controls.target);
-          if (prevUpdate.distanceTo(controls.target) > visibleDistance / 4) {
+          if (prevUpdate.distanceTo(controls.target) > visibleDistance / 20) {
             updateScene(controls.target, true);
             updateScene(controls.target, false);
             prevUpdate.copy(controls.target);
             refreshStarVisuals();
+            fetchNearbyStars(controls.target);
           }
         }
       });
@@ -1718,13 +1719,15 @@
           for (var i = 0; i < starCatalog.count; i++) {
             if (visibleStars.has(i)) continue;
             var ix = i * 3,
-              dx = pos[ix] - px, dy = pos[ix + 1] - py, dz = pos[ix + 2] - pz;
-            if (dx * dx + dy * dy + dz * dz < r2) {
-              var sphere = createStar(starCatalog, i);
-              visibleStars.set(i, sphere);
-              scene.add(sphere);
-              clickableObjects.push(sphere);
-            }
+              dx = pos[ix] - px, dy = pos[ix + 1] - py, dz = pos[ix + 2] - pz,
+              d2 = dx * dx + dy * dy + dz * dz;
+            if (d2 >= r2) continue;
+            var addMaxDist = maxVisibilityDistance(starCatalog.getSpectralType(i), visibilityConfig);
+            if (d2 > addMaxDist * addMaxDist) continue;
+            var sphere = createStar(starCatalog, i);
+            visibleStars.set(i, sphere);
+            scene.add(sphere);
+            clickableObjects.push(sphere);
           }
           for (var dyn of starCatalog.dynamicEntries()) {
             if (dyn.position.distanceTo(position) < visibleDistance && !clickableObjects.includes(dyn.mesh)) {

@@ -60,6 +60,12 @@ export function openDb(dbPath = DEFAULT_DB_PATH) {
   return db;
 }
 
+export function openDbReadOnly(dbPath = DEFAULT_DB_PATH) {
+  const db = new Database(dbPath, { readonly: true });
+  db.pragma("query_only = true");
+  return db;
+}
+
 function ensureXyzColumns(db) {
   const columns = db.prepare(`PRAGMA table_info(stars)`).all().map((c) => c.name);
   for (const column of ["x_ly", "y_ly", "z_ly"]) {
@@ -434,23 +440,36 @@ export function getShellRows(db, minLy, maxLy) {
 
 const EXPORT_COLUMNS = `gaia_source_id, otype, sp_type, main_id, diameter_solar, x_ly, y_ly, z_ly`;
 
+const stmtCacheByDb = new WeakMap();
+function prep(db, sql) {
+  let cache = stmtCacheByDb.get(db);
+  if (!cache) {
+    cache = new Map();
+    stmtCacheByDb.set(db, cache);
+  }
+  let stmt = cache.get(sql);
+  if (!stmt) {
+    stmt = db.prepare(sql);
+    cache.set(sql, stmt);
+  }
+  return stmt;
+}
+
 export function getPinnedRowsForExport(db) {
-  return db.prepare(`SELECT ${EXPORT_COLUMNS} FROM stars WHERE pinned = 1 ORDER BY gaia_source_id`).all();
+  return prep(db, `SELECT ${EXPORT_COLUMNS} FROM stars WHERE pinned = 1 ORDER BY gaia_source_id`).all();
 }
 
 export function searchStarByNameForExport(db, name) {
-  return db
-    .prepare(`SELECT ${EXPORT_COLUMNS} FROM stars WHERE main_id = ? AND pinned = 0 LIMIT 1`)
-    .get(name);
+  return prep(db, `SELECT ${EXPORT_COLUMNS} FROM stars WHERE main_id = ? AND pinned = 0 LIMIT 1`).get(name);
 }
 
 export function getRowsNearPointForExport(db, x, y, z, radiusLy, extraWhereSql = "1=1", extraParams = []) {
   const columns = EXPORT_COLUMNS.split(", ")
     .map((c) => `s.${c}`)
     .join(", ");
-  return db
-    .prepare(
-      `SELECT ${columns} FROM stars s NOT INDEXED
+  return prep(
+    db,
+    `SELECT ${columns} FROM stars s NOT INDEXED
        JOIN stars_rtree r ON r.id = s.rowid
        WHERE r.minX >= ? AND r.minX <= ?
          AND r.minY >= ? AND r.minY <= ?
@@ -459,7 +478,7 @@ export function getRowsNearPointForExport(db, x, y, z, radiusLy, extraWhereSql =
          AND (${extraWhereSql})
          AND (s.x_ly - ?) * (s.x_ly - ?) + (s.y_ly - ?) * (s.y_ly - ?) + (s.z_ly - ?) * (s.z_ly - ?)
              <= MIN(?, maxVisDistSq(s.sp_type))`,
-    )
+  )
     .all(
       x - radiusLy, x + radiusLy,
       y - radiusLy, y + radiusLy,
@@ -475,9 +494,9 @@ export function getRowsNearPointByRareClassForExport(db, x, y, z, radiusLy, spec
   const columns = EXPORT_COLUMNS.split(", ")
     .map((c) => `s.${c}`)
     .join(", ");
-  return db
-    .prepare(
-      `SELECT ${columns}
+  return prep(
+    db,
+    `SELECT ${columns}
        FROM stars_rtree_rare r
        JOIN stars s ON s.rowid = r.id
        WHERE r.minX >= ? AND r.maxX <= ?
@@ -487,7 +506,7 @@ export function getRowsNearPointByRareClassForExport(db, x, y, z, radiusLy, spec
          AND s.pinned = 0
          AND (s.x_ly - ?) * (s.x_ly - ?) + (s.y_ly - ?) * (s.y_ly - ?) + (s.z_ly - ?) * (s.z_ly - ?)
              <= MIN(?, maxVisDistSq(s.sp_type))`,
-    )
+  )
     .all(
       x - radiusLy, x + radiusLy,
       y - radiusLy, y + radiusLy,
@@ -506,9 +525,9 @@ export function getRowsNearPointInFRtreeForExport(db, x, y, z, radiusLy) {
   const columns = EXPORT_COLUMNS.split(", ")
     .map((c) => `s.${c}`)
     .join(", ");
-  return db
-    .prepare(
-      `SELECT ${columns}
+  return prep(
+    db,
+    `SELECT ${columns}
        FROM stars_rtree_f r
        JOIN stars s ON s.rowid = r.id
        WHERE r.minX >= ? AND r.maxX <= ?
@@ -517,7 +536,7 @@ export function getRowsNearPointInFRtreeForExport(db, x, y, z, radiusLy) {
          AND s.pinned = 0
          AND (s.x_ly - ?) * (s.x_ly - ?) + (s.y_ly - ?) * (s.y_ly - ?) + (s.z_ly - ?) * (s.z_ly - ?)
              <= MIN(?, maxVisDistSq(s.sp_type))`,
-    )
+  )
     .all(
       x - radiusLy, x + radiusLy,
       y - radiusLy, y + radiusLy,
@@ -537,7 +556,8 @@ export function getNearestStarForExport(db, x, y, z, spectralClasses, startRadiu
   const want = new Set(spectralClasses);
   const obaCodes = ["O", "B", "A"].filter((c) => want.has(c)).map((c) => RARE_CLASS_CODE[c]);
   const rareStmt = obaCodes.length
-    ? db.prepare(
+    ? prep(
+        db,
         `SELECT ${columns}
          FROM stars_rtree_rare r
          JOIN stars s ON s.rowid = r.id
@@ -553,7 +573,8 @@ export function getNearestStarForExport(db, x, y, z, spectralClasses, startRadiu
   const maxC = obaCodes.length ? Math.max(...obaCodes) : 0;
 
   const fStmt = want.has("F")
-    ? db.prepare(
+    ? prep(
+        db,
         `SELECT ${columns}
          FROM stars_rtree_f r
          JOIN stars s ON s.rowid = r.id
@@ -602,22 +623,11 @@ export function getNearestStarForExport(db, x, y, z, spectralClasses, startRadiu
 
 export function getRowsByMainIdsForExport(db, mainIds) {
   if (mainIds.length === 0) return [];
-  db.exec(`CREATE TEMP TABLE IF NOT EXISTS _wanted_main_ids (main_id TEXT PRIMARY KEY)`);
-  db.exec(`DELETE FROM _wanted_main_ids`);
-  const insert = db.prepare(`INSERT OR IGNORE INTO _wanted_main_ids (main_id) VALUES (?)`);
-  const insertMany = db.transaction((ids) => {
-    for (const id of ids) insert.run(id);
-  });
-  insertMany(mainIds);
-
-  const rows = db
-    .prepare(
-      `SELECT ${EXPORT_COLUMNS} FROM stars
-       WHERE main_id IN (SELECT main_id FROM _wanted_main_ids) AND pinned = 0
-       ORDER BY gaia_source_id`,
-    )
-    .all();
-
-  db.exec(`DROP TABLE _wanted_main_ids`);
-  return rows;
+  const placeholders = mainIds.map(() => "?").join(", ");
+  return prep(
+    db,
+    `SELECT ${EXPORT_COLUMNS} FROM stars
+     WHERE main_id IN (${placeholders}) AND pinned = 0
+     ORDER BY gaia_source_id`,
+  ).all(...mainIds);
 }
