@@ -122,14 +122,12 @@ const StarAgent = (() => {
   function findStar(name) {
     if (!name) return null;
     const n = name.toLowerCase().trim();
-    // Exact match by SIMBAD ID
-    let found = _stars.find((s) => s.name.toLowerCase() === n);
+    let found = _stars.findByName(name);
     if (found) return found;
     // Match by common name via the ghb names table
     const alias = _names.find((e) => e.name.toLowerCase() === n);
-    if (alias) found = _stars.find((s) => s.name === alias.code);
+    if (alias) found = _stars.findByName(alias.code);
     if (found) return found;
-    // Partial match
     found = _stars.find(
       (s) =>
         s.name.toLowerCase().includes(n) ||
@@ -144,15 +142,15 @@ const StarAgent = (() => {
   }
 
   function getSpectralFromData(star) {
-    if (!star.data) return "";
-    const parts = star.data.split("|");
-    return parts[4] || "";
+    return star.spectralType || "";
   }
 
   function getRadiusFromData(star) {
-    if (!star.data) return "";
-    const parts = star.data.split("|");
-    return parts[5] || "";
+    // diameterSolar (ratio to the Sun's own diameter) is 0 when no
+    // measurement is known — most stars, since SIMBAD's mesDiameter table
+    // only covers a small fraction.
+    if (!star.diameterSolar) return "";
+    return star.diameterSolar.toFixed(1) + " solar radii";
   }
 
   // ─── Tool handlers ───────────────────────────────────────────────────────────
@@ -221,7 +219,7 @@ const StarAgent = (() => {
       });
 
       if (max_distance_ly) {
-        const sun = _stars.find((s) => s.name === "Sun");
+        const sun = _stars.findByName("Sun");
         const sunPos = sun ? sun.position : { distanceTo: () => 0 };
         results = results.filter(
           (s) => s.position && s.position.distanceTo(sunPos) <= max_distance_ly,
@@ -335,7 +333,7 @@ Communication style: warm, enthusiastic, slightly whimsical — like a seasoned 
 
     let locationLine;
     if (_activeStar) {
-      const focused = _stars.find((s) => s.name === _activeStar);
+      const focused = _stars.findByName(_activeStar);
       const d =
         focused && focused.position
           ? Math.round(focused.position.distanceTo(pos) * 10) / 10

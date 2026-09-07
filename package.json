@@ -8,9 +8,19 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "server": "node server/index.js",
+    "bench:nearby": "node scripts/bench-nearby.js",
+    "sync:gaia": "node scripts/sync-gaia.js",
+    "sync:simbad": "node scripts/sync-simbad.js",
+    "seed:constellation-stars": "node scripts/seed-constellation-stars.js",
+    "resync:all": "node scripts/resync-all.js",
+    "build:density-grid": "node scripts/build-density-grid.js",
+    "download:gaia": "node scripts/download-gaia-archive.js"
   },
   "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "express": "^5.2.1",
     "three": "^0.184.0"
   },
   "devDependencies": {
