@@ -10,7 +10,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 import {
   openDbReadOnly,
-  getPinnedRowsForExport,
   getRowsNearPointForExport,
   getRowsNearPointByRareClassForExport,
   getRowsNearPointInFRtreeForExport,
@@ -22,6 +21,7 @@ import {
 } from "../scripts/db.js";
 import { createDictionaries, addToDictionaries, buildBatchBuffer } from "../scripts/star-binary-format.js";
 import { maxVisibilityDistance } from "../utils.js";
+import { DENSITY_CELL_SIZE_LY } from "../density-grid-config.js";
 
 const ROOT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const FILES_DIR = path.join(ROOT_DIR, "files");
@@ -131,32 +131,29 @@ function constellationStarMainIds() {
 const CONSTELLATION_MAIN_IDS = constellationStarMainIds();
 
 export function buildInitialPayload(maxLy) {
-  const pinnedRows = getPinnedRowsForExport(db);
   const nearRows = getStarsNearPoint(0, 0, 0, maxLy);
-  const nearIds = new Set(nearRows.map((r) => r.gaia_source_id));
+  const nearIds = new Set(nearRows.map((r) => r.main_id));
   const farConstellationRows = getRowsByMainIdsForExport(db, CONSTELLATION_MAIN_IDS).filter(
-    (r) => !nearIds.has(r.gaia_source_id),
+    (r) => !nearIds.has(r.main_id),
   );
-  const otherRows = [...nearRows, ...farConstellationRows];
+  const rows = [...nearRows, ...farConstellationRows];
 
   const dictionaries = createDictionaries();
-  addToDictionaries(pinnedRows, true, dictionaries);
-  addToDictionaries(otherRows, false, dictionaries);
+  addToDictionaries(rows, dictionaries);
 
   return {
-    pinnedBuffer: buildBatchBuffer(pinnedRows, dictionaries, true),
-    otherBuffer: buildBatchBuffer(otherRows, dictionaries, false),
+    buffer: buildBatchBuffer(rows, dictionaries),
     dictionariesJson: { otypes: dictionaries.otypes, spectralTypes: dictionaries.spectralTypes },
-    starCount: pinnedRows.length + otherRows.length,
+    starCount: rows.length,
   };
 }
 
 export function buildNearbyPayload(x, y, z, radiusLy) {
   const rows = getStarsNearPoint(x, y, z, radiusLy);
   const dictionaries = createDictionaries();
-  addToDictionaries(rows, false, dictionaries);
+  addToDictionaries(rows, dictionaries);
   return {
-    buffer: buildBatchBuffer(rows, dictionaries, false),
+    buffer: buildBatchBuffer(rows, dictionaries),
     dictionariesJson: { otypes: dictionaries.otypes, spectralTypes: dictionaries.spectralTypes },
   };
 }
@@ -165,26 +162,22 @@ export function buildSearchPayload(name) {
   const row = searchStarByNameForExport(db, name);
   if (!row) return null;
   const dictionaries = createDictionaries();
-  addToDictionaries([row], false, dictionaries);
+  addToDictionaries([row], dictionaries);
   return {
-    buffer: buildBatchBuffer([row], dictionaries, false),
+    buffer: buildBatchBuffer([row], dictionaries),
     dictionariesJson: { otypes: dictionaries.otypes, spectralTypes: dictionaries.spectralTypes },
   };
 }
 
-const NEAREST_STAR_CLASSES = ["O", "B", "A", "F"];
-const NEAREST_SEARCH_START_LY = 300;
-const NEAREST_SEARCH_MAX_LY = 600;
+const NEAREST_STAR_SEARCH_RADIUS_LY = DENSITY_CELL_SIZE_LY / 2;
 
 export function buildNearestStarPayload(x, y, z) {
-  const row = getNearestStarForExport(
-    db, x, y, z, NEAREST_STAR_CLASSES, NEAREST_SEARCH_START_LY, NEAREST_SEARCH_MAX_LY,
-  );
+  const row = getNearestStarForExport(db, x, y, z, NEAREST_STAR_SEARCH_RADIUS_LY);
   if (!row) return null;
   const dictionaries = createDictionaries();
-  addToDictionaries([row], false, dictionaries);
+  addToDictionaries([row], dictionaries);
   return {
-    buffer: buildBatchBuffer([row], dictionaries, false),
+    buffer: buildBatchBuffer([row], dictionaries),
     dictionariesJson: { otypes: dictionaries.otypes, spectralTypes: dictionaries.spectralTypes },
   };
 }

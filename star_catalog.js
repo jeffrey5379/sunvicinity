@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-const HEADER_FIELDS = 9;
+const HEADER_FIELDS = 8;
 const utf8Decoder = new TextDecoder();
 const GENERATED_NAME_PATTERN = /^gaia dr3 \d+$/;
 
@@ -81,7 +81,6 @@ export class StarCatalog {
       const header = new Uint32Array(buffer, 0, HEADER_FIELDS);
       const [
         count,
-        ,
         positionsOffset,
         otypeCodeOffset,
         spectralTypeIndexOffset,
@@ -133,7 +132,6 @@ export class StarCatalog {
     const header = new Uint32Array(buffer, 0, HEADER_FIELDS);
     const [
       count,
-      ,
       positionsOffset,
       otypeCodeOffset,
       spectralTypeIndexOffset,

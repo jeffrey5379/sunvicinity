@@ -1,23 +1,13 @@
 # Sun Vicinity
 
-An interactive 3D visualization of the Sun's stellar neighborhood. Explore real stars from Gaia DR3 and SIMBAD, fly out to the galactic center with its S-cluster orbits around Sgr A\*, and switch on a 3D star-density map.
+An interactive 3D visualization of the Sun's stellar neighborhood with 78 million real stars from Gaia DR3 and SIMBAD
 
 ## Features
 
 - **3D star map** — real catalog data with spectral-class colors and screen-space size scaling
-- **Density map** — 3D star-density grid with a raymarched Milky Way; click a cell to fly to the nearest bright star
+- **Density map** — 3D star-density grid with a raymarched Milky Way; click a cell to fly to the nearest star
 - **S-cluster simulation** — Keplerian orbits of stars around Sgr A\* (Gillessen+2017 elements), advancing in real time with an animation toggle
 - **AI agent** — Anthropic-powered chat assistant that can fly the camera to any star, plan tours, search by spectral type, and answer questions about the dataset
-
-## Getting Started
-
-```bash
-npm install
-npm run server   # data API — the client fetches stars from this, in a separate terminal
-npm run dev
-```
-
-Open `http://localhost:5173` in Chrome (recommended for best WebGL performance). Requires `scripts/stardata.db` — see [Updating Star Data](#updating-star-data).
 
 ## UI
 

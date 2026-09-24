@@ -1,8 +1,32 @@
-// Pure utility functions — no Three.js or DOM dependencies.
-// Imported by visuals.js and index.html; tested by tests/utils.test.js.
-
 export function plxToLy(plx) {
   return 3261.56 / plx;
+}
+
+export function pcToLy(pc) {
+  return pc * 3.26156;
+}
+
+export function bayesianDistancePc(parallaxMas, parallaxErrorMas, lengthScalePc) {
+  if (!(parallaxErrorMas > 0) || !(lengthScalePc > 0)) return null;
+
+  const L = lengthScalePc / 1000; // kpc, so parallax[mas] = 1/r[kpc]
+  const plx = parallaxMas;
+  const sigma2 = parallaxErrorMas * parallaxErrorMas;
+
+  const f = (r) => r * r * r - 2 * L * r * r + (L * plx / sigma2) * r - L / sigma2;
+  const fPrime = (r) => 3 * r * r - 4 * L * r + (L * plx) / sigma2;
+
+  let r = plx > 0 ? Math.max(1 / plx, 1e-6) : 2 * L;
+  for (let i = 0; i < 64; i++) {
+    const derivative = fPrime(r);
+    if (Math.abs(derivative) < 1e-12) break;
+    let next = r - f(r) / derivative;
+    if (!(next > 0)) next = r / 2; // guard a step that would go non-positive
+    const converged = Math.abs(next - r) < 1e-9 * r;
+    r = next;
+    if (converged) break;
+  }
+  return r * 1000; // pc
 }
 
 export function degreesToRad(degrees) {
@@ -18,6 +42,40 @@ export function raDecDistanceToXyz(raDegrees, decDegrees, distance) {
     y: distance * Math.sin(dec),
     z: distance * cosDec * Math.cos(ra),
   };
+}
+
+// Inverse of raDecDistanceToXyz (same convention: x = d·cosDec·sinRa,
+// y = d·sinDec, z = d·cosDec·cosRa). Degrees; ra wrapped to [0, 360).
+export function xyzToRaDec(x, y, z) {
+  const distance = Math.sqrt(x * x + y * y + z * z);
+  const decDegrees = Math.asin(Math.max(-1, Math.min(1, y / distance))) * (180 / Math.PI);
+  let raDegrees = Math.atan2(x, z) * (180 / Math.PI);
+  if (raDegrees < 0) raDegrees += 360;
+  return { raDegrees, decDegrees };
+}
+
+// "05h 12m 34s" — right ascension as integer hours/minutes/seconds, rounded
+// to the second (carries correctly, e.g. 23h59m59.6s -> "00h 00m 00s").
+export function formatRaHMS(raDegrees) {
+  const wrapped = ((raDegrees % 360) + 360) % 360;
+  const totalSeconds = Math.round((wrapped / 15) * 3600) % (24 * 3600);
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  const pad = (v) => String(v).padStart(2, "0");
+  return `${pad(h)}h ${pad(m)}m ${pad(s)}s`;
+}
+
+// "+23° 08′ 15″" — declination as signed integer degrees/arcminutes/
+// arcseconds, rounded to the arcsecond.
+export function formatDecDMS(decDegrees) {
+  const sign = decDegrees < 0 ? "-" : "+";
+  const totalSeconds = Math.round(Math.abs(decDegrees) * 3600);
+  const d = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  const pad = (v) => String(v).padStart(2, "0");
+  return `${sign}${pad(d)}° ${pad(m)}′ ${pad(s)}″`;
 }
 
 const KM_PER_LY = 9.4607e12;

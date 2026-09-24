@@ -91,18 +91,9 @@ app.get("/api/dictionaries", async (req, res) => {
   }
 });
 
-app.get("/api/stars/pinned", async (req, res) => {
-  try {
-    res.type("application/octet-stream").send(asBuf((await getInitialPayload(parseMaxLy(req))).pinnedBuffer));
-  } catch (e) {
-    console.error(e);
-    res.status(500).end();
-  }
-});
-
 app.get("/api/stars/initial", async (req, res) => {
   try {
-    res.type("application/octet-stream").send(asBuf((await getInitialPayload(parseMaxLy(req))).otherBuffer));
+    res.type("application/octet-stream").send(asBuf((await getInitialPayload(parseMaxLy(req))).buffer));
   } catch (e) {
     console.error(e);
     res.status(500).end();

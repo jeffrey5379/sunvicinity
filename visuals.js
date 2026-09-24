@@ -5,10 +5,6 @@ import { lumClassMult, giantBrightnessMult, maxVisibilityDistance } from "./util
 //  PARAMETERS — edit these to tune the visual appearance
 // ══════════════════════════════════════════════════════════════════════════════
 const StarVisualsConfig = {
-  // ── Visibility ──────────────────────────────────────────────────────────────
-  visRadius: 100.0, // ly — stars beyond this distance from OrbitControls target are hidden
-  fadeBand: 15.0, // ly — fade starts this many ly before visRadius
-
   // ── Brightness ──────────────────────────────────────────────────────────────
   // Multiplier applied on top of the raw mesh-scale brightness, independent of
   // DEFAULT_RADIUS — use this to re-tune overall star brightness after changing
@@ -53,14 +49,13 @@ const StarVisualsConfig = {
 
 const StarVisuals = (() => {
   // ── State ─────────────────────────────────────────────────────────────────────
-  let _scene, _camera, _controls;
+  let _scene, _camera;
   // { <class letter>: { glowMaxDist?, noGlow? }, defaultGlowMaxDist, closeRangeLy }
   // — fetched by index.html from GET /api/star-visibility-config and passed
   // into init(); see maxVisibilityDistance in utils.js for how it's used.
   let _visibilityConfig = null;
   let _points = null;
   let _uniforms = null;
-  const _lastTargetPos = new THREE.Vector3(Infinity);
   const _dynamicSlots = [];  // { mesh, bufStart } for stars with dynamicPosition = true
 
   // ── Close-star state ──────────────────────────────────────────────────────────
@@ -75,17 +70,11 @@ const StarVisuals = (() => {
     attribute vec3  aColor;
     attribute float aGlowMaxDist;
 
-    uniform vec3  uTarget;
-    uniform vec3  uTargetCam;
     uniform vec3  uCamPos;
-    uniform float uVisRadius;
-    uniform float uFadeBand;
     uniform float uPixelRatio;
 
     varying float vBrightness;
     varying vec3  vColor;
-    varying float vFade;
-    varying float vDistFromTarget;
     varying float vDistFromCam;
     varying float vGlowMaxDist;
     varying float vDynamic;
@@ -98,31 +87,17 @@ const StarVisuals = (() => {
       bool isDynamic = aGlowMaxDist < 0.0;
       vDynamic = isDynamic ? 1.0 : 0.0;
 
-      float distFromTarget;
-      vec4  mvPos;
+      vec4 mvPos;
 
       if (isDynamic) {
         // position is already in camera/eye space (CPU computed at float64 precision
         // to avoid float32 cancellation at large world-space distances like S-cluster).
-        distFromTarget = length(position.xyz - uTargetCam);
-        vDistFromCam   = length(position.xyz);
-        mvPos          = vec4(position, 1.0);
+        vDistFromCam = length(position.xyz);
+        mvPos        = vec4(position, 1.0);
       } else {
-        vec4 worldPos  = modelMatrix * vec4(position, 1.0);
-        distFromTarget = length(worldPos.xyz - uTarget);
-        vDistFromCam   = length(worldPos.xyz - uCamPos);
-        mvPos          = modelViewMatrix * vec4(position, 1.0);
-      }
-
-      vDistFromTarget = distFromTarget;
-
-      float inner = uVisRadius - uFadeBand;
-      vFade = 1.0 - clamp((distFromTarget - inner) / uFadeBand, 0.0, 1.0);
-
-      if (distFromTarget > uVisRadius || vFade < 0.001) {
-        gl_PointSize = 0.0;
-        gl_Position  = vec4(2.0, 2.0, 2.0, 1.0);
-        return;
+        vec4 worldPos = modelMatrix * vec4(position, 1.0);
+        vDistFromCam  = length(worldPos.xyz - uCamPos);
+        mvPos         = modelViewMatrix * vec4(position, 1.0);
       }
 
       gl_Position = projectionMatrix * mvPos;
@@ -143,8 +118,6 @@ const StarVisuals = (() => {
 
     varying float vBrightness;
     varying vec3  vColor;
-    varying float vFade;
-    varying float vDistFromTarget;
     varying float vDistFromCam;
     varying float vGlowMaxDist;
     varying float vDynamic;
@@ -265,7 +238,7 @@ const StarVisuals = (() => {
       float alpha = clamp(
         halo + spikeVal * 0.8 + airy + core * (0.5 + b * 0.7) + punch,
         0.0, 1.0
-      ) * vFade * nearFade * glowDistFade * closeFade;
+      ) * nearFade * glowDistFade * closeFade;
 
       if (alpha < 0.004) discard;
       gl_FragColor = vec4(col, alpha);
@@ -406,15 +379,10 @@ const StarVisuals = (() => {
     setAttr("aColor", new THREE.Float32BufferAttribute(colors, 3));
     setAttr("aGlowMaxDist", new THREE.Float32BufferAttribute(glowMaxDists, 1));
 
-    const target = _controls ? _controls.target : new THREE.Vector3();
     const cfg = StarVisualsConfig;
 
     _uniforms = {
-      uTarget:    { value: target.clone() },
-      uTargetCam: { value: new THREE.Vector3() },
       uCamPos:    { value: new THREE.Vector3() },
-      uVisRadius: { value: cfg.visRadius },
-      uFadeBand:  { value: cfg.fadeBand },
       uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
     };
 
@@ -468,28 +436,15 @@ const StarVisuals = (() => {
 
   // ── Per-frame update ──────────────────────────────────────────────────────────
   function update() {
-    if (!_uniforms || !_controls) return;
+    if (!_uniforms) return;
 
     // matrixWorldInverse is refreshed by renderer.render(), which runs AFTER this
     // function. Force a sync now so all camera-space calculations use the current
     // frame's camera transform, not the previous one.
     if (_camera) _camera.updateMatrixWorld();
 
-    const t = _controls.target;
-    if (_lastTargetPos.distanceTo(t) > 0.0001) {
-      _uniforms.uTarget.value.copy(t);
-      _lastTargetPos.copy(t);
-    }
     if (_camera) {
       _uniforms.uCamPos.value.copy(_camera.position);
-      // uTargetCam: controls.target in camera/eye space, computed at float64
-      // so the GPU receives a small accurate float32 value for dynamic star culling.
-      const e = _camera.matrixWorldInverse.elements;
-      _uniforms.uTargetCam.value.set(
-        e[0]*t.x + e[4]*t.y + e[8]*t.z  + e[12],
-        e[1]*t.x + e[5]*t.y + e[9]*t.z  + e[13],
-        e[2]*t.x + e[6]*t.y + e[10]*t.z + e[14]
-      );
     }
 
     // Update dynamic (S-cluster) star positions to camera/eye space every frame.
@@ -540,10 +495,9 @@ const StarVisuals = (() => {
   }
 
   // ── Public API ────────────────────────────────────────────────────────────────
-  function init({ scene, camera, controls, stars, visibilityConfig }) {
+  function init({ scene, camera, stars, visibilityConfig }) {
     _scene = scene;
     _camera = camera;
-    _controls = controls || null;
     _visibilityConfig = visibilityConfig;
     build(stars);
     _buildCloseMesh();

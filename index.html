@@ -20,6 +20,8 @@
       </div>
       <span id="info">Loading...</span>
     </div>
+    <div id="minimap-coords"></div>
+    <div id="minimap"></div>
 
     <script src="agent.js"></script>
     <script src="visuals.js" type="module"></script>
@@ -30,60 +32,23 @@
       import { FontLoader } from "three/addons/loaders/FontLoader.js";
       import { OrbitControls } from "three/addons/controls/OrbitControls.js";
       import { createNebula, updateNebula } from "./nebula.js";
+      import { buildMilkyWayGroup } from "./milkyway.js";
       import { BlackHole, BlackHoleConfig } from "./blackhole.js";
       import { SCluster } from "./s_cluster.js";
       import { StarCatalog } from "./star_catalog.js";
       import { maxVisibilityDistance } from "./utils.js";
-      import { loadDensityGrid, buildDensityMapGroup, getDensityCellCenter, highlightDensityCell, clearDensityHighlight } from "./density_map.js";
+      import { loadDensityGrid, buildDensityMapGroup, getDensityCellCenter, highlightDensityCell, clearDensityHighlight, setDensityBandVisible, DENSITY_BAND_COLORS } from "./density_map.js";
+      import { Minimap } from "./minimap.js";
+      import { ClickRouter } from "./click-router.js";
+      import { AnimationRunner } from "./animation-runner.js";
+      import {
+        WELCOME_MESSAGE, FEEDBACK_MESSAGE, ABOUT_MESSAGE,
+        CONS_STAGE, CONS_HIT, CONS_MISS, CONS_PART_MISS, CONS_COMPLETED,
+        STARS_STAGE, STARS_TO_VISIT, STARS_INSTRUCTIONS, STARS_INFO,
+        CLUSTERS_STAGE, CLUSTER_ORDINALS, MODE_COMPLETED,
+      } from "./content.js";
       window.THREE = THREE;
-      
-      const WELCOME_MESSAGE = "Welcome to the vicinity of the Sun. Switch to exploratory mode to study the mechanics of the model or navigate between stars in free mode.";
-      const FEEDBACK_MESSAGE = "Your feedback is always welcome: jeffrey3829@proton.me";
-      const ABOUT_MESSAGE = "Stars brightness and size not to scale. Do not consider as a source of reliable data. Please use Chrome for a better experience. This model has made use of the SIMBAD database, CDS, Strasbourg Astronomical Observatory, France.";
-      const CONS_STAGE = "Looks like some constellations names are misplaced. Will you be able to find pairs of incorrectly named constellations? Click the constellations names which are out of place.";
-      const CONS_HIT = "Well done! Let's put them in their place.";
-      const CONS_MISS = "No, these two are in place.";
-      const CONS_PART_MISS = "One of these two is misplaced. Take a closer look.";
-      const CONS_COMPLETED = "Hooray! Now all constellations are in place. The setting to hide/show constellations is available now.";
-      const STARS_STAGE = "Let's find the most interesting neighboring stars. Use 'Fly to Sun' if you got lost. ";
-      const STARS_TO_VISIT = [
-        "* alf CMa",
-        "* alf Lyr",
-        "* alf PsA",
-        "* alf Tau",
-        "* alf Boo",
-      ];
-      const STARS_INSTRUCTIONS = [
-        "The first stop is Sirius (Alpha CANIS MAJOR)",
-        "The next stop is Vega (Alpha LYRA)",
-        "Would you like to see Fomalhaut? (Alpha PISCIS AUSTRINUS)",
-        "Why not visit Aldebaran? (Alpha TAURUS)",
-        "The last destination is Arcturus (Alpha BOOTES)",
-      ];
-      const STARS_INFO = [
-        "Sirius is the brightest star in the night sky. It's a binary star consisting of a main-sequence star Sirius A, and a faint white dwarf Sirius B.",
-        "Vega is the fifth-brightest star in the night sky and is only about a tenth of the age of the Sun.",
-        "Fomalhaut is a class A star on the main sequence approximately 25 light-years from the Sun.",
-        "Aldebaran is a red giant with a surface temperature of 3,900 K, it is over 400 times as luminous as the Sun.",
-        "Arcturus is a red giant of spectral type K, an aging star around 7.1 billion years old.",
-      ];
-      const CLUSTERS_STAGE = "Looks like it's time to visit nearest star clusters. Move with WASD. Use mouse panning to correct the direction and the compas to navigate.";
-      const CLUSTERS_TO_VISIT = ["HYADES", "PLEIADES", "BEEHIVE", "IC 2391", "NGC 3532"];
-      const CLUSTERS_INSTRUCTIONS = [
-        " The first stop is HYADES cluster in Taurus",
-        " Next let's visit the PLEIADES cluster which is also in Taurus but a bit further",
-        " Now let's head to the BEEHIVE cluster in Cancer",
-        " The next stop is IC 2391 in Vela",
-        " And the last one is NGC 3532 in Carina",
-      ];
-      const CLUSTERS_INFO = [
-        "The age of the Hyades is estimated to be about 625 million years. The core of the cluster, where stars are the most densely packed, has a radius of 8.8 light-years, and the cluster's tidal radius is 33 light-years.",
-        "The cluster is dominated by hot blue luminous stars that have formed within the last 100 million years. Astronomers estimate that the cluster will survive for approximately another 250 million years, after which the clustering will be lost due to gravitational interactions with the galactic neighborhood.",
-        "Age and proper motion of the Beehive Cluster coincide with those of the Hyades, suggesting they may share similar origins. Both clusters also contain red giants and white dwarfs, which represent later stages of stellar evolution, along with many main sequence stars.",
-        "IC 2391 is an open cluster in the constellation Vela consisting of hot, young, blueish stars, some of which binaries and one of which is a quadruple.",
-        "NGC 3532 is an open cluster in the constellation Carina. Its population of approximately 150 stars of 7th magnitude or fainter includes seven red giants and seven white dwarfs.",
-      ];
-      const MODE_COMPLETED = "Exploratory mode completed. Search by star name is available now. You can also use density setting to find interesting areas in Sun surroundings or you can travel to the center of the galaxy and observe the movement of nearby stars.";
+
       const EXPLORATORY_MODE = "Exploratory";
       const APPTYPE = {
         CONLINE: "CONLINE",
@@ -93,26 +58,21 @@
         BLACK_HOLE: "BLACK_HOLE",
       };
       const ANIMATION = { RECENTER: "RECENTER", CONS_SWAP: "CONS_SWAP", CLUSTER_ONE: "CLUSTER_ONE", CLUSTER_TWO: "CLUSTER_TWO", DENSITY_ZOOM: "DENSITY_ZOOM" };
-      const animationHandlers = {
-        [ANIMATION.RECENTER]:     tickRecenter,
-        [ANIMATION.CONS_SWAP]:    tickConsSwap,
-        [ANIMATION.CLUSTER_ONE]:  tickClusterOne,
-        [ANIMATION.CLUSTER_TWO]:  tickClusterTwo,
-        [ANIMATION.DENSITY_ZOOM]: tickDensityZoom,
-      };
-      var scene, camera, controls, renderer;
+      AnimationRunner.registerHandler(ANIMATION.RECENTER,     tickRecenter);
+      AnimationRunner.registerHandler(ANIMATION.CONS_SWAP,    tickConsSwap);
+      AnimationRunner.registerHandler(ANIMATION.CLUSTER_ONE,  tickClusterOne);
+      AnimationRunner.registerHandler(ANIMATION.CLUSTER_TWO,  tickClusterTwo);
+      AnimationRunner.registerHandler(ANIMATION.DENSITY_ZOOM, tickDensityZoom);
+      var scene, camera, controls, renderer, milkyWay;
       const DEFAULT_RADIUS = 0.001;
-      var animation,
-        animationSteps = 200,
+      var animationSteps = 200,
         clusterAnimationSteps = 1500,
-        cameraElevation = 10,
-        tempInc = Math.PI / animationSteps;
-      var clustTempInc = (2 * Math.PI) / clusterAnimationSteps,
-        currentStep = 0,
-        exposure = 6;
+        cameraElevation = 10;
+      var exposure = 6;
       var constellations = [],
         constellationLines = [],
         constellationNames = [],
+        minimapLabelData = [],
         lines = [],
         clickableObjects = [],
         conLabelLines = [],
@@ -131,9 +91,10 @@
         pairConSteps = [],
         starColours = [],
         starNames = [],
-        clusters = [];
-      var visibleDistance = 500.0,
-        discoverDistance = 50.0;
+        clusters = [],
+        clustersToVisit = [];
+      var visibleDistance = 1000.0,
+        discoverDistance = 80.0;
       var prevUpdate = new THREE.Vector3(),
         _lastDistTarget = new THREE.Vector3(),
         starGeometry = new THREE.IcosahedronGeometry(1, 0);
@@ -142,25 +103,31 @@
         mouseDownX, mouseDownY;
       var recenterStart = null, recenterObject = null;
       var visibilityConfig = null;
-      var cameraXsteps = [],
-        cameraYsteps = [],
-        cameraZsteps = [],
-        targetXsteps = [],
-        targetYsteps = [],
-        targetZsteps = [],
-        cameraXstepsTwo = [],
-        cameraYstepsTwo = [],
-        cameraZstepsTwo = [],
+      // CLUSTER_ONE/TWO animation state, set once per cluster click (see the
+      // CLUSTER_LABEL click handler) and read frame-by-frame by
+      // tickClusterOne/tickClusterTwo — no precomputed per-frame arrays.
+      var clusterOneCameraStart = new THREE.Vector3(),
+        clusterOneCameraEnd = new THREE.Vector3(),
+        clusterOneTargetStart = new THREE.Vector3(),
+        clusterOneTargetEnd = new THREE.Vector3(),
+        clusterTwoRadius = 0,
+        clusterTwoStartAngle = 0,
         mainFont;
+      var CLUSTER_ORBIT_RADIUS = 50;
       const delay = (millis) =>
         new Promise((resolve, reject) => {
           setTimeout((_) => resolve(), millis);
         });
+      var MOVEMENT_SPEEDS = [0.5, 1.0, 2.0];
+      var DENSITY_MODE_SPEED_BOOST = 8;
       var params = {
         exposure: exposure,
         Mode: "Free",
         showConstellations: false,
+        showMinimap: false,
         showDensity: false,
+        densityBands: [true, true, true, true, true],
+        moveSpeedIdx: 1,
         Info: "None",
         Search: "",
       };
@@ -174,13 +141,13 @@
       const starName = document.getElementById("star-name");
       const info = document.getElementById("info");
       let loadStep = 0;
-      const LOAD_TOTAL = 10;
+      const LOAD_TOTAL = 9;
       const updateProgressText = () => {
         info.innerText = "Loading... " + Math.round((loadStep / LOAD_TOTAL) * 100) + "%";
       };
       var tempMessage, oldText;
       scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 100000.0);
+      camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 200000.0);
       camera.position.set(0, 0, 3);
       camera.lookAt(0, 0, 0);
       controls = new OrbitControls(camera, renderer.domElement);
@@ -189,8 +156,12 @@
       controls.enableKeys = false;
       controls.enablePan = false;
       controls.addEventListener("change", render);
+
+      Minimap.init(document.getElementById("minimap"), document.getElementById("minimap-coords"));
+
       var raycaster = new THREE.Raycaster(),
         mouse = new THREE.Vector2();
+      raycaster.params.Line.threshold = 0.05;
       window.addEventListener("pointerup", onDocumentMouseUp, false);
       window.addEventListener("pointerdown", onDocumentMouseDown, false);
       window.addEventListener("mousemove", onSphereHover, false);
@@ -202,13 +173,12 @@
           return;
         }
         if ([87, 83, 65, 68].includes(event.keyCode)) {
-          if (progress < 6 || animation != null) {
+          if (progress < 6 || AnimationRunner.isRunning()) {
             return;
           }
           var offset = new THREE.Vector3().subVectors(camera.position, controls.target);
-          var speed = offset.length() / 100.0;
-          var multiply = Math.max(1, Math.floor(0.8 / speed));
-          speed *= multiply;
+          var speed = MOVEMENT_SPEEDS[Math.round(params.moveSpeedIdx)] || 1.0;
+          if (params.showDensity) speed *= DENSITY_MODE_SPEED_BOOST;
           var forward = offset.normalize();
           var right = new THREE.Vector3(-forward.z, 0, forward.x).normalize();
           var move = new THREE.Vector3();
@@ -227,10 +197,14 @@
               break;
           }
           StarAgent.setActiveStar(null);
+          if (activeStar != undefined) {
+            showLabel(activeStar, false);
+            activeStar = null;
+          }
           camera.position.add(move);
           controls.target.add(move);
           camera.lookAt(controls.target);
-          if (prevUpdate.distanceTo(controls.target) > visibleDistance / 20) {
+          if (!params.showDensity && prevUpdate.distanceTo(controls.target) > visibleDistance / 20) {
             updateScene(controls.target, true);
             updateScene(controls.target, false);
             prevUpdate.copy(controls.target);
@@ -329,17 +303,59 @@
         .onChange(function (value) {
           showConstellations(value);
         });
+      var showMinimapCtrl = gui.add(params, "showMinimap")
+        .name("Show minimap")
+        .onChange(function (value) {
+          params.showMinimap = value;
+          render();
+        });
       var showDensityCtrl = gui.add(params, "showDensity")
         .name("Show density")
         .onChange(function (value) {
           toggleDensityMap(value);
         });
+      var densityBandsCtrl = document.createElement("div");
+      densityBandsCtrl.className = "controller density-bands hidden";
+      densityBandsCtrl.style.display = "none"; // shown only while Show density is on
+      var densityBandsName = document.createElement("div"); // empty — keeps widgets aligned
+      densityBandsName.className = "name";
+      var densityBandsWidget = document.createElement("div");
+      densityBandsWidget.className = "widget";
+      DENSITY_BAND_COLORS.forEach(function (col, k) {
+        var chk = document.createElement("input");
+        chk.type = "checkbox";
+        chk.checked = params.densityBands[k];
+        chk.title = col;
+        chk.style.accentColor = col;
+        chk.style.outline = "1px solid " + col;
+        chk.addEventListener("change", function () {
+          params.densityBands[k] = chk.checked;
+          if (densityMapMesh) setDensityBandVisible(densityMapMesh, k, chk.checked);
+          render();
+        });
+        densityBandsWidget.appendChild(chk);
+      });
+      densityBandsCtrl.appendChild(densityBandsName);
+      densityBandsCtrl.appendChild(densityBandsWidget);
+      showDensityCtrl.domElement.after(densityBandsCtrl);
+      function applyDensityBands() {
+        if (!densityMapMesh) return;
+        for (var k = 0; k < params.densityBands.length; k++) {
+          setDensityBandVisible(densityMapMesh, k, params.densityBands[k]);
+        }
+      }
+      var moveSpeedCtrl = gui.add(params, "moveSpeedIdx", 0, MOVEMENT_SPEEDS.length - 1, 1)
+        .name("Movement speed x" + MOVEMENT_SPEEDS[params.moveSpeedIdx])
+        .onChange(function (i) {
+          moveSpeedCtrl.name("Movement speed x" + MOVEMENT_SPEEDS[Math.round(i)]);
+        });
+      moveSpeedCtrl.$input.style.display = "none";
 
       var densityMapGroup = null, densityMapRequest = null, preDensityMapChildren = null, preDensityMapClickable = null;
       var preDensityMapCameraFar = null;
       var densityMapMesh = null, hoveredDensityInstanceId = -1;
       var DENSITY_MODE_CAMERA_FAR = 500000.0;
-      var DENSITY_ZOOM_OUT_LY = 15000.0, DENSITY_ZOOM_IN_LY = 5.0;
+      var DENSITY_ZOOM_OUT_LY = 5000.0, DENSITY_ZOOM_IN_LY = 5.0;
       var densityZoomStartDist = 0, densityZoomEndDist = 0, densityZoomDir = null, densityZoomOnComplete = null;
       var densityZoomStartTarget = new THREE.Vector3(), densityZoomEndTarget = new THREE.Vector3();
       function startDensityZoom(targetDistanceLy, onComplete, endTarget) {
@@ -350,30 +366,23 @@
         densityZoomOnComplete = onComplete || null;
         densityZoomStartTarget.copy(controls.target);
         densityZoomEndTarget.copy(endTarget || controls.target);
-        currentStep = 0;
-        animation = ANIMATION.DENSITY_ZOOM;
+        AnimationRunner.play(ANIMATION.DENSITY_ZOOM);
       }
       function tickDensityZoom() {
-        currentStep++;
-        var t = currentStep / animationSteps;
+        var t = AnimationRunner.step / animationSteps;
         var ease = (1 - Math.cos(Math.PI * t)) / 2;
         var dist = densityZoomStartDist + (densityZoomEndDist - densityZoomStartDist) * ease;
         controls.target.copy(densityZoomStartTarget).lerp(densityZoomEndTarget, ease);
         camera.position.copy(controls.target).addScaledVector(densityZoomDir, dist);
         camera.lookAt(controls.target);
-        if (currentStep >= animationSteps) {
-          animation = null;
-          currentStep = 0;
+        if (AnimationRunner.step >= animationSteps) {
+          AnimationRunner.stop();
           var onComplete = densityZoomOnComplete;
           densityZoomOnComplete = null;
           onComplete?.();
         }
       }
 
-      // Shared by the checkbox-driven exit (toggleDensityMap(false)) and
-      // the click-a-cell-to-fly exit (flyToNearestBrightStarAt) — both
-      // land here once their zoom-in has finished, the only difference is
-      // what (if anything) runs after.
       function restoreSceneAfterDensityMode() {
         scene.remove(densityMapGroup);
         for (var child of preDensityMapChildren) scene.add(child);
@@ -390,6 +399,7 @@
       async function toggleDensityMap(value) {
         params.showDensity = value;
         if (!value) {
+          densityBandsCtrl.style.display = "none";
           if (preDensityMapChildren) {
             if (hoveredDensityInstanceId !== -1) {
               clearDensityHighlight(densityMapMesh, hoveredDensityInstanceId);
@@ -419,18 +429,20 @@
         }
         await densityMapRequest;
         if (!densityMapGroup || !params.showDensity || preDensityMapChildren) return;
-        preDensityMapChildren = scene.children.slice();
+        preDensityMapChildren = scene.children.filter((c) => c !== milkyWay);
         for (var child of preDensityMapChildren) scene.remove(child);
         preDensityMapClickable = clickableObjects.slice();
         clickableObjects.length = 0;
         preDensityMapCameraFar = camera.far;
         camera.far = DENSITY_MODE_CAMERA_FAR;
         camera.updateProjectionMatrix();
+        applyDensityBands();
+        densityBandsCtrl.style.display = "";
         scene.add(densityMapGroup);
         startDensityZoom(DENSITY_ZOOM_OUT_LY);
       }
 
-      async function fetchNearestBrightStar(x, y, z) {
+      async function fetchNearestStar(x, y, z) {
         const params = "x=" + x + "&y=" + y + "&z=" + z;
         try {
           const [bufferRes, dictRes] = await Promise.all([
@@ -442,9 +454,9 @@
             throw new Error("nearest-star request failed: " + bufferRes.status + "/" + dictRes.status);
           }
           const [buffer, dictionaries] = await Promise.all([bufferRes.arrayBuffer(), dictRes.json()]);
-          const header = new Uint32Array(buffer, 0, 9);
-          const nameOffsets = new Uint32Array(buffer, header[5], 2); // count is always 1 here
-          const namesBlob = new Uint8Array(buffer, header[6], header[7]);
+          const header = new Uint32Array(buffer, 0, 8);
+          const nameOffsets = new Uint32Array(buffer, header[4], 2); // count is always 1 here
+          const namesBlob = new Uint8Array(buffer, header[5], header[6]);
           const name = new TextDecoder().decode(namesBlob.subarray(nameOffsets[0], nameOffsets[1]));
           starCatalog.addBatch(buffer, dictionaries);
           return starCatalog.findByName(name);
@@ -454,13 +466,13 @@
         }
       }
 
-      function flyToNearestBrightStarAt(center) {
+      function flyToNearestStarAt(center) {
         if (!preDensityMapChildren) return; // not actually in density mode — ignore
         if (hoveredDensityInstanceId !== -1) {
           clearDensityHighlight(densityMapMesh, hoveredDensityInstanceId);
           hoveredDensityInstanceId = -1;
         }
-        var starPromise = fetchNearestBrightStar(center.x, center.y, center.z);
+        var starPromise = fetchNearestStar(center.x, center.y, center.z);
         params.showDensity = false;
         showDensityCtrl.updateDisplay();
 
@@ -479,7 +491,7 @@
               StarAgent.setActiveStar(star.name);
               settleAtStar(star);
             } else {
-              showMessage("No bright star found near that point", 3000);
+              showMessage("No star found near that point", 3000);
             }
           });
         }, center);
@@ -558,8 +570,7 @@
             var delta = new THREE.Vector3().subVectors(activeStar.position, controls.target);
             controls.target.add(delta);
             camera.position.add(delta);
-            if (activeStar.labelPrimary) activeStar.labelPrimary.position.add(delta);
-            if (activeStar.labelSecondary) activeStar.labelSecondary.position.add(delta);
+            if (activeStar.label) activeStar.label.position.add(delta);
           }
         }
       };
@@ -678,6 +689,8 @@
         runSearch(value);
       });
       showConstCtrl.domElement.classList.add("hidden");
+      showMinimapCtrl.domElement.classList.add("hidden");
+      moveSpeedCtrl.domElement.classList.add("hidden");
       showDensityCtrl.domElement.classList.add("hidden");
       searchCtrl.domElement.classList.add("hidden");
       goToSagACtrl.domElement.classList.add("hidden");
@@ -687,7 +700,9 @@
       await readClusters();
       await setupScene();
       createNebula(scene, starCatalog);
-      StarAgent.init({ controls: controls, stars: starCatalog, names: starNames });
+      milkyWay = buildMilkyWayGroup();
+      scene.add(milkyWay);
+      StarAgent.init({ controls: controls, stars: starCatalog, names: starNames, search: searchStarOnServer });
       StarAgent.setNavigator(function(simbadId) {
         var star = starCatalog.findByName(simbadId);
         if (!star) return false;
@@ -753,26 +768,47 @@
           .then((res) => res.text())
           .then((text) => {
             for (let line of text.split("\n")) {
+              if (!line.trim()) continue;
               var data = line.split("|"),
                 coord = data[1].split(" "),
-                distance = data[2],
-                center = data[3].split(" "),
+                distance = parseFloat(data[2]),
                 clusterLabel = createLabel(data[0], 1.0, controls.target);
               clusterLabel.position.setFromSphericalCoords(distance, coord[0], coord[1]);
               clusterLabel.apptype = APPTYPE.CLUSTER_LABEL;
               clusterLabel.name = data[0];
-              clusterLabel.center = new THREE.Vector3();
-              clusterLabel.center.setFromSphericalCoords(distance, center[0], center[1]);
+              clusterLabel.distance = distance;
+              clusterLabel.info = (data[3] || "").trim();
               var lookAt = new THREE.Vector3();
               lookAt.y = clusterLabel.position.y;
               clusterLabel.lookAt(lookAt);
+              clusterLabel.center = labelCenterWorld(clusterLabel);
               clusterLabelLines.push(...clusterLabel.children);
               clusters.push(clusterLabel);
             }
+            // 5 random clusters for the visiting stage, ordered nearest-first.
+            clustersToVisit = shuffle(clusters.slice())
+              .slice(0, 5)
+              .sort((a, b) => a.distance - b.distance);
           })
           .catch((e) => console.error(e));
       }
-      
+
+      // In-place Fisher-Yates.
+      function shuffle(arr) {
+        for (var i = arr.length - 1; i > 0; i--) {
+          var j = Math.floor(Math.random() * (i + 1));
+          var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+        }
+        return arr;
+      }
+
+      // " The <ordinal> stop is the <NAME> cluster." for the CLUSTERS_STAGE prompt.
+      function clusterInstruction(i) {
+        var c = clustersToVisit[i];
+        if (!c) return "";
+        return " The " + (CLUSTER_ORDINALS[i] || "next") + " stop is the " + c.name + " cluster.";
+      }
+
       function onSphereHover(event) {
         event.preventDefault();
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -787,7 +823,7 @@
           var nearest = findNearestStarByScreenPos(mouse, 3);
           if (nearest) intersects = [{ object: nearest}];
         }
-        if (intersects.length > 0 && !animation && intersects[0].object.text != undefined) {
+        if (intersects.length > 0 && !AnimationRunner.isRunning() && intersects[0].object.text != undefined) {
           var object = intersects[0].object;
           if (object != activeStar) {
             showStarName(object.name);
@@ -802,6 +838,9 @@
         raycaster.setFromCamera(mouse, camera);
         var hits = raycaster.intersectObject(densityMapMesh);
         var id = hits.length > 0 ? hits[0].instanceId : -1;
+        // Ignore cells whose colour band is filtered out (still raycast-hit).
+        var ud = densityMapMesh.userData;
+        if (id !== -1 && ud.bandVisible && !ud.bandVisible[ud.bands[id]]) id = -1;
         if (id === hoveredDensityInstanceId) return;
         if (hoveredDensityInstanceId !== -1) clearDensityHighlight(densityMapMesh, hoveredDensityInstanceId);
         hoveredDensityInstanceId = id;
@@ -840,13 +879,14 @@
             case 9:
             case 10:
               clustersStageActive = true;
-              showMessage(CLUSTERS_STAGE + CLUSTERS_INSTRUCTIONS[progress - 6]);
+              showMessage(CLUSTERS_STAGE + clusterInstruction(progress - 6));
               break;
             case 11:
               showArrow(false);
               clustersStageActive = false;
               searchCtrl.domElement.classList.remove("hidden");
               showDensityCtrl.domElement.classList.remove("hidden");
+              densityBandsCtrl.classList.remove("hidden");
               goToSagACtrl.domElement.classList.remove("hidden");
               showSmoothMessage(MODE_COMPLETED);
           }
@@ -896,7 +936,7 @@
 
           arrow = arrowGroup;
           updateArrowHud();
-          arrow.lookAt(clusters[progress - 6].center);
+          if (clustersToVisit[progress - 6]) arrow.lookAt(clustersToVisit[progress - 6].center);
           scene.add(arrow);
         } else {
           scene.remove(arrow);
@@ -951,7 +991,7 @@
 
         if (params.showDensity) {
           if (hoveredDensityInstanceId !== -1 && densityMapMesh) {
-            flyToNearestBrightStarAt(getDensityCellCenter(densityMapMesh, hoveredDensityInstanceId));
+            flyToNearestStarAt(getDensityCellCenter(densityMapMesh, hoveredDensityInstanceId));
           }
           return;
         }
@@ -973,7 +1013,7 @@
         if (clustersStageActive && intersects.length == 0) {
           intersects = raycaster.intersectObjects(clusterLabelLines);
         }
-        if (intersects.length > 0 && animation == null &&
+        if (intersects.length > 0 && !AnimationRunner.isRunning() &&
           (intersects[0].object.apptype != undefined || intersects[0].object.parent.apptype != undefined)) {
           if (object == undefined) {
             object = intersects[0].object;
@@ -983,113 +1023,110 @@
           if (object.type != 'Line' && object.apptype == undefined && object.parent && object.parent.apptype != undefined) {
             object = object.parent;
           }
-          currentStep = 0;
-          if (object.type === "Line" && object.parent.apptype == APPTYPE.CONLABEL && conGameActive) {
-            object.material.color.setHex(turquoise);
-            if (chosenCon == null) {
-              chosenCon = object.parent;
+          await ClickRouter.dispatch(object, intersects);
+        }
+      }
+
+      // --- Click routing: what a resolved click target does, tried in this
+      // order; the default (plain star/black-hole recenter) must stay last.
+      ClickRouter.register({
+        test: (object) => object.type === "Line" && object.parent.apptype == APPTYPE.CONLABEL && conGameActive,
+        handle: async (object) => {
+          object.material.color.setHex(turquoise);
+          if (chosenCon == null) {
+            chosenCon = object.parent;
+          } else {
+            pairCon = object.parent;
+            await delay(1000);
+            if (pairCon == chosenCon) {
+              return;
+            }
+            if (pairCon.conGroup != null && pairCon.conGroup == chosenCon.conGroup) {
+              showMessage(CONS_HIT);
+              var chosenCenter = labelCenterWorld(chosenCon);
+              var pairCenter = labelCenterWorld(pairCon);
+              var center = new THREE.Vector3().addVectors(pairCenter, chosenCenter).multiplyScalar(0.5);
+              var u = new THREE.Vector3().subVectors(chosenCenter, center);
+              var v = new THREE.Vector3().crossVectors(center.clone().normalize(), u).normalize().multiplyScalar(u.length() / 3);
+              chosenConSteps = [];
+              pairConSteps = [];
+              for (let i = 0; i <= animationSteps; i++) {
+                var ct = Math.PI * (animationSteps - i) / animationSteps;
+                chosenConSteps.push(new THREE.Vector3(
+                  center.x + u.x * Math.cos(ct) + v.x * Math.sin(ct),
+                  center.y + u.y * Math.cos(ct) + v.y * Math.sin(ct),
+                  center.z + u.z * Math.cos(ct) + v.z * Math.sin(ct)
+                ));
+                var st = Math.PI * i / animationSteps;
+                pairConSteps.push(new THREE.Vector3(
+                  center.x - u.x * Math.cos(st) - v.x * Math.sin(st),
+                  center.y - u.y * Math.cos(st) - v.y * Math.sin(st),
+                  center.z - u.z * Math.cos(st) - v.z * Math.sin(st)
+                ));
+              }
+              AnimationRunner.play(ANIMATION.CONS_SWAP);
             } else {
-              pairCon = object.parent;
-              await delay(1000);
-              if (pairCon == chosenCon) {
-                return;
-              }
-              if (pairCon.conGroup != null && pairCon.conGroup == chosenCon.conGroup) {
-                showMessage(CONS_HIT);
-                var chosenCenter = labelCenterWorld(chosenCon);
-                var pairCenter = labelCenterWorld(pairCon);
-                var center = new THREE.Vector3().addVectors(pairCenter, chosenCenter).multiplyScalar(0.5);
-                var u = new THREE.Vector3().subVectors(chosenCenter, center);
-                var v = new THREE.Vector3().crossVectors(center.clone().normalize(), u).normalize().multiplyScalar(u.length() / 3);
-                chosenConSteps = [];
-                pairConSteps = [];
-                for (let i = 0; i <= animationSteps; i++) {
-                  var ct = Math.PI * (animationSteps - i) / animationSteps;
-                  chosenConSteps.push(new THREE.Vector3(
-                    center.x + u.x * Math.cos(ct) + v.x * Math.sin(ct),
-                    center.y + u.y * Math.cos(ct) + v.y * Math.sin(ct),
-                    center.z + u.z * Math.cos(ct) + v.z * Math.sin(ct)
-                  ));
-                  var st = Math.PI * i / animationSteps;
-                  pairConSteps.push(new THREE.Vector3(
-                    center.x - u.x * Math.cos(st) - v.x * Math.sin(st),
-                    center.y - u.y * Math.cos(st) - v.y * Math.sin(st),
-                    center.z - u.z * Math.cos(st) - v.z * Math.sin(st)
-                  ));
-                }
-                animation = ANIMATION.CONS_SWAP;
+              if (pairCon.conGroup != null || chosenCon.conGroup != null) {
+                showMessage(CONS_PART_MISS, 5000);
               } else {
-                if (pairCon.conGroup != null || chosenCon.conGroup != null) {
-                  showMessage(CONS_PART_MISS, 5000);
-                } else {
-                  showMessage(CONS_MISS, 5000);
-                }
-                chosenCon.children[0].material.color.setHex(lightGray);
-                pairCon.children[0].material.color.setHex(lightGray);
-                chosenCon = undefined;
-                pairCon = undefined;
+                showMessage(CONS_MISS, 5000);
               }
+              chosenCon.children[0].material.color.setHex(lightGray);
+              pairCon.children[0].material.color.setHex(lightGray);
+              chosenCon = undefined;
+              pairCon = undefined;
             }
+          }
+        },
+      });
+
+      ClickRouter.register({
+        test: (object) => object.type === "Line" && object.parent.apptype == APPTYPE.CLUSTER_LABEL && clustersStageActive,
+        handle: (object, intersects) => {
+          if (object.parent.visited || camera.position.distanceTo(object.parent.position) > discoverDistance) {
             return;
           }
-          if (object.type === "Line" && object.parent.apptype == APPTYPE.CLUSTER_LABEL && clustersStageActive) {
-            if (
-              object.parent.visited ||
-              camera.position.distanceTo(object.parent.position) > discoverDistance
-            ) {
-              return;
-            }
-            if (object.parent.name != CLUSTERS_TO_VISIT[progress - 6]) {
-              return;
-            }
-            constBefore = params.showConstellations;
-            showConstellations(false);
-            animation = ANIMATION.CLUSTER_ONE;
-            controls.enabled = false;
-            showArrow(false);
-            object.material.color.setHex(turquoise);
-            intersects = intersects.filter((line) => line.object.parent.apptype == APPTYPE.CLUSTER_LABEL);
-            activeCluster = intersects[0].object.parent;
-            var newTargetPosition = activeCluster.center;
-            activeCluster.visited = true;
-            var newCameraPosition = new THREE.Vector3();
-            newCameraPosition.copy(newTargetPosition);
-            var max = Math.max(Math.abs(newCameraPosition.x), Math.abs(newCameraPosition.z));
-            var multiply = (max - 30) / max;
-            newCameraPosition.x *= multiply;
-            newCameraPosition.y += cameraElevation;
-            newCameraPosition.z *= multiply;
-          
-            var tempX = 0.0;
-            for (let i = 0; i < animationSteps; i++) {
-              cameraXsteps[i] = (Math.PI * (newCameraPosition.x - camera.position.x) * Math.sin(tempX)) / (2 * animationSteps);
-              cameraYsteps[i] = (Math.PI * (newCameraPosition.y - camera.position.y) * Math.sin(tempX)) / (2 * animationSteps);
-              cameraZsteps[i] = (Math.PI * (newCameraPosition.z - camera.position.z) * Math.sin(tempX)) / (2 * animationSteps);
-              targetXsteps[i] = (Math.PI * (newTargetPosition.x - controls.target.x) * Math.sin(tempX)) / (2 * animationSteps);
-              targetYsteps[i] = (Math.PI * (newTargetPosition.y - controls.target.y) * Math.sin(tempX)) / (2 * animationSteps);
-              targetZsteps[i] = (Math.PI * (newTargetPosition.z - controls.target.z) * Math.sin(tempX)) / (2 * animationSteps);
-              tempX = tempX + tempInc;
-            }
-            var tempVar = new THREE.Vector3();
-            tempVar.copy(newCameraPosition);
-            tempVar.y -= cameraElevation;
-            var rotationRadius = tempVar.distanceTo(newTargetPosition);
-            tempX = Math.atan(newTargetPosition.x / newTargetPosition.z) + Math.PI/2;
-            for (let i = 0; i < clusterAnimationSteps; i++) {
-              cameraXstepsTwo[i] = Math.sign(newTargetPosition.z) * Math.sign(newTargetPosition.x) * rotationRadius * Math.cos(tempX);
-              if (progress == 10) {
-                cameraYstepsTwo[i] = -40*Math.cos(tempX + 1.808) ;
-              }
-              cameraZstepsTwo[i] = -Math.sign(newTargetPosition.z) * rotationRadius * Math.sin(tempX);
-              tempX = tempX - clustTempInc;
-            }
+          if (!clustersToVisit[progress - 6] || object.parent.name != clustersToVisit[progress - 6].name) {
             return;
           }
+          constBefore = params.showConstellations;
+          showConstellations(false);
+          AnimationRunner.play(ANIMATION.CLUSTER_ONE);
+          controls.enabled = false;
+          showArrow(false);
+          object.material.color.setHex(turquoise);
+          intersects = intersects.filter((line) => line.object.parent.apptype == APPTYPE.CLUSTER_LABEL);
+          activeCluster = intersects[0].object.parent;
+          var newTargetPosition = activeCluster.center;
+          activeCluster.visited = true;
+          var newCameraPosition = new THREE.Vector3();
+          newCameraPosition.copy(newTargetPosition);
+          var dist = Math.sqrt(newCameraPosition.x * newCameraPosition.x + newCameraPosition.z * newCameraPosition.z) || 1;
+          var scale = (dist - CLUSTER_ORBIT_RADIUS) / dist;
+          newCameraPosition.x *= scale;
+          newCameraPosition.y += cameraElevation;
+          newCameraPosition.z *= scale;
+
+          clusterOneCameraStart.copy(camera.position);
+          clusterOneCameraEnd.copy(newCameraPosition);
+          clusterOneTargetStart.copy(controls.target);
+          clusterOneTargetEnd.copy(newTargetPosition);
+
+          var relStartX = newCameraPosition.x - newTargetPosition.x,
+            relStartZ = newCameraPosition.z - newTargetPosition.z;
+          clusterTwoRadius = CLUSTER_ORBIT_RADIUS;
+          clusterTwoStartAngle = Math.atan2(relStartX, relStartZ);
+        },
+      });
+
+      ClickRouter.register({
+        test: () => true,
+        handle: (object) => {
           StarAgent.setActiveStar(object.name);
           recenter(object);
           render();
-        }
-      }
+        },
+      });
 
       window.onresize = function () {
         var width = window.innerWidth,
@@ -1097,6 +1134,7 @@
         camera.aspect = width / height;
         camera.updateProjectionMatrix();
         renderer.setSize(width, height);
+        Minimap.resize();
         render();
       };
 
@@ -1124,8 +1162,8 @@
       }
 
       function recenter(object) {
-        currentStep = 0;
-        animation = ANIMATION.RECENTER;
+        if (params.showDensity) return; // density mode owns the scene/clickables — ignore
+        AnimationRunner.play(ANIMATION.RECENTER);
         recenterStart = controls.target.clone();
         recenterObject = object;
         if (activeStar != undefined) {
@@ -1135,7 +1173,9 @@
         refreshStarVisuals();
         var target = object.apptype != undefined ? object : findVisibleStarMesh(object.name) || object;
         if (camera.position.distanceTo(target.position) > 0.1 && target.text != undefined) {
-          showLabel(target, true);
+          var cameraOffset = new THREE.Vector3().subVectors(camera.position, controls.target);
+          var finalCameraPos = object.position.clone().add(cameraOffset);
+          showLabel(target, true, finalCameraPos);
         }
         if (target.apptype == APPTYPE.STAR) {
           activeStar = target;
@@ -1204,9 +1244,6 @@
         const constellationLineMaterial = new THREE.LineBasicMaterial({ color: gray });
         await readConstellationData();
         showGalaxyCenter();
-        const pinnedBufferPromise = fetch("/api/stars/pinned")
-          .then((res) => res.arrayBuffer())
-          .then((buf) => { loadStep++; updateProgressText(); return buf; });
         const initialBufferPromise = fetch("/api/stars/initial?maxLy=" + visibleDistance)
           .then((res) => res.arrayBuffer())
           .then((buf) => { loadStep++; updateProgressText(); return buf; });
@@ -1219,11 +1256,10 @@
         const visibilityConfigPromise = fetch("/api/star-visibility-config")
           .then((res) => res.json())
           .then((cfg) => { loadStep++; updateProgressText(); return cfg; });
-        await Promise.all([pinnedBufferPromise, initialBufferPromise, dictionariesPromise, sClusterPromise, visibilityConfigPromise])
-          .then(async ([pinnedBuffer, initialBuffer, dictionaries, sClusterText, fetchedVisibilityConfig]) => {
+        await Promise.all([initialBufferPromise, dictionariesPromise, sClusterPromise, visibilityConfigPromise])
+          .then(async ([initialBuffer, dictionaries, sClusterText, fetchedVisibilityConfig]) => {
             visibilityConfig = fetchedVisibilityConfig;
-            const buffers = [pinnedBuffer, initialBuffer];
-            starCatalog.build(buffers, dictionaries, (position, index) => {
+            starCatalog.build([initialBuffer], dictionaries, (position, index) => {
               var name = starCatalog.getName(index);
               if (controls.target.distanceTo(position) < visibleDistance) {
                 var sphere = createStar(starCatalog, index);
@@ -1266,6 +1302,7 @@
               lines.push(line);
               scene.add(line);
             }
+            Minimap.build(constellationLines, minimapLabelData);
             updateLoadProgress();
             // Init S-cluster stars using same geometry/scale as regular stars
             var starGeometry = new THREE.SphereGeometry(1, 6, 6);
@@ -1278,7 +1315,7 @@
             }
 
             showLabel(activeStar, true);
-            StarVisuals.init({ scene: scene, camera: camera, controls: controls, stars: currentVisibleMeshes(), visibilityConfig: visibilityConfig });
+            StarVisuals.init({ scene: scene, camera: camera, stars: currentVisibleMeshes(), visibilityConfig: visibilityConfig });
             loadStep++; updateProgressText();
           })
           .catch((e) => console.error(e));
@@ -1373,33 +1410,68 @@
       }
       
       function showStarName(message) {
-        starName.innerText = message;
+        starName.innerText = starDisplayName(message);
       }
-      
-      function showLabel(sphere, show) {
+
+      function starDisplayName(name) {
+        return /^\d+$/.test(name) ? "Gaia DR3 " + name : name;
+      }
+
+      function cameraUpVector() {
+        return new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+      }
+
+      function labelViewRight(starPosition, facing) {
+        var viewForward = new THREE.Vector3().subVectors(starPosition, facing);
+        if (viewForward.lengthSq() < 1e-12) viewForward.set(0, 0, -1);
+        viewForward.normalize();
+        var viewRight = new THREE.Vector3().crossVectors(viewForward, cameraUpVector());
+        if (viewRight.lengthSq() < 1e-12) viewRight.set(1, 0, 0);
+        return viewRight.normalize();
+      }
+
+      function createStarLabel(sphere, anchorPosition, facing) {
+        var displayName = starDisplayName(sphere.name);
+        var name = sphere.secondName != undefined
+            ? sphere.secondName + " (" + displayName + ")"
+            : displayName;
+        var group = new THREE.Object3D();
+        group.add(createLabel(name, 0.02, new THREE.Vector3(0, 0, 0)));
+        group.add(createLabel(sphere.text, 0.005, new THREE.Vector3(0, -0.015, 0)));
+        group.position.copy(anchorPosition);
+        // Object3D.lookAt's own internal cross product uses this.up as the
+        // up reference — swap in the camera's live up axis so that
+        // computation is singularity-free too (see cameraUpVector above).
+        group.up.copy(cameraUpVector());
+        group.lookAt(facing);
+        return group;
+      }
+
+      function showLabel(sphere, show, lookAtPosition) {
         if (!show) {
-          scene.remove(sphere.labelPrimary);
-          scene.remove(sphere.labelSecondary);
-          disposeLabel(sphere.labelPrimary);
-          disposeLabel(sphere.labelSecondary);
-          sphere.labelPrimary = undefined;
-          sphere.labelSecondary = undefined;
+          scene.remove(sphere.label);
+          disposeLabel(sphere.label);
+          sphere.label = undefined;
         } else {
+          var facing = lookAtPosition || camera.position;
           var labelOffset = sphere.apptype === APPTYPE.BLACK_HOLE ? 8 : 24;
-          var position = new THREE.Vector3(
-            sphere.position.x + labelOffset * sphere.initialscale,
-            sphere.position.y,
-            sphere.position.z
-          );
-          var name = sphere.secondName != undefined
-              ? sphere.secondName + " (" + sphere.name + ")"
-              : sphere.name;
-          sphere.labelPrimary = createLabel(name, 0.02, position);
-          scene.add(sphere.labelPrimary);
-          position.y -= 0.015;
-          sphere.labelSecondary = createLabel(sphere.text, 0.005, position);
-          scene.add(sphere.labelSecondary);
+          var viewRight = labelViewRight(sphere.position, facing);
+          var anchor = sphere.position.clone().addScaledVector(viewRight, labelOffset * sphere.initialscale);
+          sphere.label = createStarLabel(sphere, anchor, facing);
+          scene.add(sphere.label);
         }
+      }
+
+      var LABEL_UPDATE_MAX_DIST = 15;
+
+      function updateActiveStarLabelTransform() {
+        if (!activeStar || !activeStar.label) return;
+        if (camera.position.distanceTo(activeStar.position) > LABEL_UPDATE_MAX_DIST) return;
+        var labelOffset = activeStar.apptype === APPTYPE.BLACK_HOLE ? 8 : 24;
+        var viewRight = labelViewRight(activeStar.position, camera.position);
+        activeStar.label.position.copy(activeStar.position).addScaledVector(viewRight, labelOffset * activeStar.initialscale);
+        activeStar.label.up.copy(cameraUpVector());
+        activeStar.label.lookAt(camera.position);
       }
       
       function createLabel(message, size, position, color) {
@@ -1436,6 +1508,7 @@
       }
       
       function readConstellationData() {
+        minimapLabelData.length = 0;
         const p1 = fetch("./files/cons_lines.txt")
           .then((res) => res.text())
           .then((text) => {
@@ -1460,6 +1533,10 @@
               var coord = data[1].split(" "),
                 conLabel = createLabel(data[0], 0.4, controls.target, lightGray);
               conLabel.position.setFromSphericalCoords(30, coord[0], coord[1]);
+              for (let child of conLabel.children) {
+                child.geometry.translate(-conLabel.textCenter.x, -conLabel.textCenter.y, 0);
+              }
+              conLabel.textCenter.set(0, 0, 0);
               conLabel.visible = false;
               conLabel.apptype = APPTYPE.CONLABEL;
               conLabel.conGroup = null;
@@ -1468,6 +1545,7 @@
               conLabelLines.push(...conLabel.children);
               constellationNames.push(conLabel);
               scene.add(conLabel);
+              minimapLabelData.push({ name: data[0], theta: parseFloat(coord[0]), phi: parseFloat(coord[1]) });
             }
             var neighborPairs = [];
             for (let i = 0; i < constellationNames.length; i++) {
@@ -1515,30 +1593,27 @@
 
       function disposeLabel(label) {
         if (!label) return;
-        var sharedMaterial = null;
-        for (var i = 0; i < label.children.length; i++) {
-          var child = label.children[i];
+        var materials = new Set();
+        label.traverse(function (child) {
           if (child.geometry) child.geometry.dispose();
-          sharedMaterial = child.material;
-        }
-        if (sharedMaterial) sharedMaterial.dispose();
+          if (child.material) materials.add(child.material);
+        });
+        materials.forEach(function (mat) { mat.dispose(); });
       }
       
       function tickRecenter() {
-        currentStep++;
-        var t = currentStep / animationSteps;
+        var t = AnimationRunner.step / animationSteps;
         var ease = (1 - Math.cos(Math.PI * t)) / 2;
         var targetPos = recenterStart.clone().lerp(recenterObject.position, ease);
         var move = new THREE.Vector3().subVectors(targetPos, controls.target);
         controls.target.copy(targetPos);
         camera.position.add(move);
         camera.lookAt(controls.target);
-        if (currentStep >= animationSteps) {
-          animation = null;
+        if (AnimationRunner.step >= animationSteps) {
+          AnimationRunner.stop();
           recenterObject = null;
           updateScene(activeStar.position, false);
           refreshStarVisuals();
-          currentStep = 0;
           if (params.Mode == EXPLORATORY_MODE && activeStar.name == STARS_TO_VISIT[progress - 1]) {
             showSmoothMessage("Well done! " + STARS_INFO[progress - 1]);
             var audio = new Audio("./files/paz.mp3");
@@ -1546,6 +1621,7 @@
             audio.play();
             setTimeout(() => {
               progress++;
+              if (progress === 6) moveSpeedCtrl.domElement.classList.remove("hidden");
               showInfo();
             }, 15000);
           }
@@ -1553,14 +1629,13 @@
       }
 
       function tickConsSwap() {
-        currentStep++;
-        var t = currentStep / animationSteps;
+        var t = AnimationRunner.step / animationSteps;
         var ease = (1 - Math.cos(Math.PI * t)) / 2;
         var spinAngle = (10 * Math.PI) * ease;
-        positionLabelOnEllipse(chosenCon, chosenConSteps[animationSteps - currentStep], spinAngle);
-        positionLabelOnEllipse(pairCon, pairConSteps[currentStep], spinAngle);
-        if (currentStep >= animationSteps) {
-          animation = null;
+        positionLabelOnEllipse(chosenCon, chosenConSteps[animationSteps - AnimationRunner.step], spinAngle);
+        positionLabelOnEllipse(pairCon, pairConSteps[AnimationRunner.step], spinAngle);
+        if (AnimationRunner.step >= animationSteps) {
+          AnimationRunner.stop();
           chosenCon.children[0].material.color.setHex(lightGray);
           pairCon.children[0].material.color.setHex(lightGray);
           pairCon.conGroup = null;
@@ -1573,6 +1648,7 @@
           } else {
             showMessage(CONS_COMPLETED);
             showConstCtrl.domElement.classList.remove("hidden");
+            showMinimapCtrl.domElement.classList.remove("hidden");
             conGameActive = false;
             params.showConstellations = true;
             showConstCtrl.updateDisplay();
@@ -1589,20 +1665,18 @@
         if (activeStar != undefined) {
           showLabel(activeStar, false);
         }
-        var cameramove = new THREE.Vector3(cameraXsteps[currentStep], cameraYsteps[currentStep], cameraZsteps[currentStep]),
-          targetmove = new THREE.Vector3(targetXsteps[currentStep], targetYsteps[currentStep], targetZsteps[currentStep]);
-        currentStep++;
-        camera.position.add(cameramove);
-        controls.target.add(targetmove);
+        var ease = (1 - Math.cos(Math.PI * AnimationRunner.step / animationSteps)) / 2;
+        camera.position.copy(clusterOneCameraStart).lerp(clusterOneCameraEnd, ease);
+        controls.target.copy(clusterOneTargetStart).lerp(clusterOneTargetEnd, ease);
         camera.lookAt(controls.target);
-        if (currentStep >= animationSteps) {
-          animation = ANIMATION.CLUSTER_TWO;
-          currentStep = 1;
+        if (AnimationRunner.step >= animationSteps) {
+          AnimationRunner.play(ANIMATION.CLUSTER_TWO);
+          if (activeCluster) activeCluster.visible = false;
           var audio = new Audio("./files/ekm.mp3");
           audio.volume = 0.5;
           audio.play();
-          if (params.Mode == EXPLORATORY_MODE && activeCluster.name == CLUSTERS_TO_VISIT[progress - 6]) {
-            showSmoothMessage("Well done! " + CLUSTERS_INFO[progress - 6]);
+          if (params.Mode == EXPLORATORY_MODE && activeCluster === clustersToVisit[progress - 6]) {
+            showSmoothMessage("Well done! " + (activeCluster.info || ""));
             setTimeout(() => {
               progress++;
               showInfo();
@@ -1612,23 +1686,23 @@
       }
 
       function tickClusterTwo() {
-        var yStep = progress != 10 ? 0.0 : (cameraYstepsTwo[currentStep] - cameraYstepsTwo[currentStep - 1]);
-        var cameramove = new THREE.Vector3(cameraXstepsTwo[currentStep] - cameraXstepsTwo[currentStep - 1], 
-                                            yStep, 
-                                            cameraZstepsTwo[currentStep] - cameraZstepsTwo[currentStep - 1]);
-        currentStep++;
-        camera.position.add(cameramove);
+        const clustTempInc = (2 * Math.PI) / clusterAnimationSteps;
+        var anglePrev = clusterTwoStartAngle - clustTempInc * (AnimationRunner.step - 1),
+          angleNow = clusterTwoStartAngle - clustTempInc * AnimationRunner.step; // clockwise (viewed from above)
+        camera.position.x += clusterTwoRadius * (Math.sin(angleNow) - Math.sin(anglePrev));
+        camera.position.z += clusterTwoRadius * (Math.cos(angleNow) - Math.cos(anglePrev));
         camera.lookAt(controls.target);
-        if (currentStep >= clusterAnimationSteps) {
-          if (progress < 11) {
+        if (AnimationRunner.step >= clusterAnimationSteps) {
+          if (clustersToVisit.indexOf(activeCluster) < clustersToVisit.length - 1) {
             setTimeout(() => {
               showArrow(true);
             }, 1000);
           }
           controls.enabled = true;
-          animation = null;
-          currentStep = 0;
+          AnimationRunner.stop();
           showConstellations(constBefore);
+          if (activeCluster) activeCluster.visible = true;
+          if (activeCluster) activeCluster.children[0].material.color.setHex(white);
         }
       }
 
@@ -1641,28 +1715,27 @@
         sClusterYearObj.year = Math.round(sClusterTime);
         StarVisuals.markDynamicDirty();
         if (activeStar && activeStar.dynamicPosition) {
-          if (animation !== ANIMATION.RECENTER) {
+          if (!AnimationRunner.isPlaying(ANIMATION.RECENTER)) {
             var delta = new THREE.Vector3().subVectors(activeStar.position, controls.target);
             controls.target.add(delta);
             camera.position.add(delta);
-            if (activeStar.labelPrimary) activeStar.labelPrimary.position.add(delta);
-            if (activeStar.labelSecondary) activeStar.labelSecondary.position.add(delta);
+            if (activeStar.label) activeStar.label.position.add(delta);
           } else if (prevActivePos) {
             var labelDelta = new THREE.Vector3().subVectors(activeStar.position, prevActivePos);
-            if (activeStar.labelPrimary) activeStar.labelPrimary.position.add(labelDelta);
-            if (activeStar.labelSecondary) activeStar.labelSecondary.position.add(labelDelta);
+            if (activeStar.label) activeStar.label.position.add(labelDelta);
           }
         }
       }
 
       function render() {
         if (bh && sClusterAnimating) tickSCluster();
-        animationHandlers[animation]?.();
+        AnimationRunner.update();
+        updateActiveStarLabelTransform();
         StarVisuals.update();
         BlackHole.update(camera);
-        if (arrow != undefined && scene.children.includes(arrow) && clusters[progress - 6]) {
+        if (arrow != undefined && scene.children.includes(arrow) && clustersToVisit[progress - 6]) {
           updateArrowHud();
-          arrow.lookAt(clusters[progress - 6].center);
+          arrow.lookAt(clustersToVisit[progress - 6].center);
         }
         updateNebula(camera);
         adjustStars();
@@ -1672,6 +1745,7 @@
           document.getElementById("distance").textContent = lyDist == 0 ? "" : (lyDist < 10000 ? (lyDist + " ly") : ((lyDist/1000).toFixed() + " Kly")) + " from the Sun";
         }
         BlackHole.render(renderer, scene, camera);
+        Minimap.render(camera, controls, params.showMinimap && (!activeStar || activeStar.name !== "Sun"));
       }
 
       function adjustStars() {
