@@ -9,7 +9,7 @@ const NORTH_GALACTIC_POLE_DEC_DEG = 27.12825;
 
 const DISK_OUTER_RADIUS_LY = 50000.0; // matches index.html's controls.maxDistance
 const DISK_SCALE_LENGTH_LY = 16000.0; // radial exponential falloff — stylized, not real-disk-accurate
-const DISK_SCALE_HEIGHT_LY = 1400.0; // vertical falloff
+const DISK_SCALE_HEIGHT_LY = 500.0; // vertical falloff — smaller = flatter edge-on band
 const ARM_COUNT = 2.0;
 const ARM_PITCH_RAD = 0.14;
 const ARM_SHARPNESS = 1.3; // was an implicit 2.0 (spiralCos*spiralCos)
@@ -22,19 +22,19 @@ const BAR_WIDTH_LY = 1500.0; // half-width
 const BAR_STRENGTH = 1.1;
 const BAR_COLOR = 0xffe0a0;
 const BULGE_FLATTEN = 0.55; // z-axis squash relative to the disk plane
-const BULGE_SCALE_LY = 5000.0; // gaussian sigma, not a hard edge
+const BULGE_SCALE_LY = 2000.0; // gaussian sigma, not a hard edge
 const BULGE_STRENGTH = 1.3;
 const CORE_SCALE_LY = 400.0; // tight, bright pinpoint at the very center
 const CORE_STRENGTH = 4.0;
 const NOISE_FREQ = 0.00035; // ~1/(2900ly) — clumpy dust-lane-ish texture scale
 const NOISE_AMOUNT = 0.35;
 const DISK_COLOR = 0xbba36a; // diffuse disk — older, yellower population
-const ARM_COLOR = 0xaaccff; // spiral arms — young, bluer population
+const ARM_COLOR = 0xc7b878;
 const BULGE_COLOR = 0xffcc88;
 const CORE_COLOR = 0xfff3d6;
 const DENSITY_MULTIPLIER = 0.0005;
-const GALAXY_OPACITY = 0.95;
-const RAYMARCH_STEPS = 64;
+const GALAXY_OPACITY = 0.2; // master brightness dimmer — final alpha *= this, shape/balance untouched
+const RAYMARCH_STEPS = 44; // perf/quality knob — dense regions (bulge/core) exit early via the alpha>0.95 break anyway
 
 const VERT = `
 varying vec3 vLocalPos;
@@ -172,7 +172,7 @@ void main() {
     float d = clamp(s.a * stepLen * uDensity, 0.0, 1.0);
     color += (1.0 - alpha) * s.rgb * d;
     alpha += (1.0 - alpha) * d;
-    if (alpha > 0.98) break;
+    if (alpha > 0.95) break;
   }
   if (alpha < 0.003) discard;
   gl_FragColor = vec4(color, alpha * uOpacity);

@@ -1,6 +1,5 @@
 
-export const FORMAT_VERSION = 3; // bumped: diameter field is now a solar-diameter ratio, not km
-export const HEADER_FIELDS = 9; // count, formatVersion, positionsOffset, otypeCodeOffset,
+export const HEADER_FIELDS = 8; // count, positionsOffset, otypeCodeOffset,
 // spectralTypeIndexOffset, nameOffsetsOffset, namesBlobOffset, namesBlobLength,
 // diameterSolarOffset
 const HEADER_BYTES = HEADER_FIELDS * 4;
@@ -13,7 +12,7 @@ export function positionFor(row) {
 }
 
 export function nameFor(row) {
-  return row.main_id || `Gaia DR3 ${row.gaia_source_id}`;
+  return row.main_id;
 }
 
 class SectionWriter {
@@ -42,9 +41,8 @@ class SectionWriter {
   }
 }
 
-export function spectralTypeFor(row, isPinned) {
-  if (row.sp_type) return row.sp_type;
-  return isPinned ? "" : "M";
+export function spectralTypeFor(row) {
+  return row.sp_type || "M";
 }
 
 export function createDictionaries() {
@@ -53,14 +51,14 @@ export function createDictionaries() {
 
 // Mutates `dictionaries` in place with any (otype, spectralType) values from
 // `rows` not already known.
-export function addToDictionaries(rows, isPinned, dictionaries) {
+export function addToDictionaries(rows, dictionaries) {
   for (const row of rows) {
     const otype = row.otype || "";
     if (!dictionaries.otypeIndex.has(otype)) {
       dictionaries.otypeIndex.set(otype, dictionaries.otypes.length);
       dictionaries.otypes.push(otype);
     }
-    const spType = spectralTypeFor(row, isPinned);
+    const spType = spectralTypeFor(row);
     if (!dictionaries.spectralTypeIndex.has(spType)) {
       dictionaries.spectralTypeIndex.set(spType, dictionaries.spectralTypes.length);
       dictionaries.spectralTypes.push(spType);
@@ -68,7 +66,7 @@ export function addToDictionaries(rows, isPinned, dictionaries) {
   }
 }
 
-export function buildBatchBuffer(rows, dictionaries, isPinned) {
+export function buildBatchBuffer(rows, dictionaries) {
   const count = rows.length;
   const positions = new Float32Array(count * 3);
   const otypeCode = new Uint16Array(count);
@@ -84,7 +82,7 @@ export function buildBatchBuffer(rows, dictionaries, isPinned) {
     positions[i * 3 + 1] = p.y;
     positions[i * 3 + 2] = p.z;
     otypeCode[i] = dictionaries.otypeIndex.get(row.otype || "");
-    spectralTypeIndex[i] = dictionaries.spectralTypeIndex.get(spectralTypeFor(row, isPinned));
+    spectralTypeIndex[i] = dictionaries.spectralTypeIndex.get(spectralTypeFor(row));
     diameterSolar[i] = row.diameter_solar || 0;
 
     const nameBuf = Buffer.from(nameFor(row), "utf8");
@@ -113,13 +111,12 @@ export function buildBatchBuffer(rows, dictionaries, isPinned) {
     HEADER_FIELDS,
   );
   header[0] = count;
-  header[1] = FORMAT_VERSION;
-  header[2] = positionsOffset;
-  header[3] = otypeCodeOffset;
-  header[4] = spectralTypeIndexOffset;
-  header[5] = nameOffsetsOffset;
-  header[6] = namesBlobOffset;
-  header[7] = namesBlob.length;
-  header[8] = diameterSolarOffset;
+  header[1] = positionsOffset;
+  header[2] = otypeCodeOffset;
+  header[3] = spectralTypeIndexOffset;
+  header[4] = nameOffsetsOffset;
+  header[5] = namesBlobOffset;
+  header[6] = namesBlob.length;
+  header[7] = diameterSolarOffset;
   return out;
 }

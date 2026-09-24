@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import { StarCatalog } from '../star_catalog.js';
 
-const HEADER_FIELDS = 9;
+const HEADER_FIELDS = 8;
 const HEADER_BYTES = HEADER_FIELDS * 4;
 
 function buildBatchBuffer(stars, dictionaries) {
@@ -58,7 +58,7 @@ function buildBatchBuffer(stars, dictionaries) {
 
   const header = new Uint32Array(buffer, 0, HEADER_FIELDS);
   header.set([
-    count, 1, offsets[0], offsets[1], offsets[2], offsets[4], offsets[5], namesBlob.length, offsets[3],
+    count, offsets[0], offsets[1], offsets[2], offsets[4], offsets[5], namesBlob.length, offsets[3],
   ]);
 
   return buffer;

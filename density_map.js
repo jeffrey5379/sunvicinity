@@ -1,58 +1,56 @@
 import * as THREE from "three";
-import { buildMilkyWayGroup } from "./milkyway.js";
+import { DENSITY_CELL_SIZE_LY, DENSITY_BANDS } from "./density-grid-config.js";
 
-const FORMAT_VERSION = 1;
-const HEADER_BYTES = 20;
+const HEADER_BYTES = 8; // uint32 cellCount, uint32 maxCount
 
 export async function loadDensityGrid(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`density grid fetch failed: ${res.status}`);
   const buf = await res.arrayBuffer();
   const dv = new DataView(buf);
-  const formatVersion = dv.getUint32(0, true);
-  if (formatVersion !== FORMAT_VERSION) {
-    throw new Error(`density grid format ${formatVersion} unsupported (expected ${FORMAT_VERSION})`);
-  }
-  const cellSizeLy = dv.getFloat32(4, true);
-  const radiusLy = dv.getFloat32(8, true);
-  const cellCount = dv.getUint32(12, true);
-  const maxCount = dv.getUint32(16, true);
+  const cellCount = dv.getUint32(0, true);
+  const maxCount = dv.getUint32(4, true);
 
   const ix = new Int32Array(buf, HEADER_BYTES, cellCount);
   const iy = new Int32Array(buf, HEADER_BYTES + cellCount * 4, cellCount);
   const iz = new Int32Array(buf, HEADER_BYTES + cellCount * 8, cellCount);
   const n = new Uint32Array(buf, HEADER_BYTES + cellCount * 12, cellCount);
 
-  return { cellSizeLy, radiusLy, cellCount, maxCount, ix, iy, iz, n };
+  return { cellSizeLy: DENSITY_CELL_SIZE_LY, cellCount, maxCount, ix, iy, iz, n };
 }
 
-const RAMP_BANDS = [
-  { min: 0.0, opacity: 0.1, color: new THREE.Color(0xffffff) }, // 0-20%: white, most transparent
-  { min: 0.2, opacity: 0.3, color: new THREE.Color(0xffff00) }, // 20-40%: yellow
-  { min: 0.4, opacity: 0.7, color: new THREE.Color(0xffa500) }, // 40-60%: light orange
-  { min: 0.6, opacity: 0.9, color: new THREE.Color(0xcc6600) }, // 60-80%: dark orange
-  { min: 0.8, opacity: 1.0, color: new THREE.Color(0xff0000) },  // 80-100%: red, least transparent
-];
+// THREE.Color instances for each band, built once from the plain hex values
+// in density-grid-config.js (kept dependency-free there since the Node
+// build script reads the same file).
+const BAND_COLORS = DENSITY_BANDS.map((b) => new THREE.Color(b.color));
 
-function pickBand(t) {
-  const clamped = Math.min(Math.max(t, 0), 1);
-  let band = RAMP_BANDS[0];
-  for (const candidate of RAMP_BANDS) {
-    if (clamped >= candidate.min) band = candidate;
+// Bands are keyed by absolute star count per cell — see density-grid-
+// config.js for why (a fraction of the busiest cell skews badly).
+function pickBandIndex(count) {
+  for (let k = 0; k < DENSITY_BANDS.length; k++) {
+    if (count >= DENSITY_BANDS[k].min && count <= DENSITY_BANDS[k].max) return k;
   }
-  return band;
+  // Outside every band (e.g. negative, or a gap left by hand-edited
+  // boundaries) — clamp to the nearest edge rather than crash.
+  return count < DENSITY_BANDS[0].min ? 0 : DENSITY_BANDS.length - 1;
 }
 
-function dimmedRampColor(t, out) {
-  const band = pickBand(t);
-  return out.copy(band.color).multiplyScalar(band.opacity);
+// Swatch colours for the density colour-filter checkboxes — each band's
+// colour dimmed by its opacity, i.e. the actual colour written to the cells.
+export const DENSITY_BAND_COLORS = DENSITY_BANDS.map(
+  (b, i) => "#" + BAND_COLORS[i].clone().multiplyScalar(b.opacity).getHexString()
+);
+
+function dimmedRampColor(count, out) {
+  const idx = pickBandIndex(count);
+  return out.copy(BAND_COLORS[idx]).multiplyScalar(DENSITY_BANDS[idx].opacity);
 }
 
 // The same band's colour at full brightness, dimming undone — used for
 // the hover highlight (see highlightDensityCell): "fully opaque" here
 // means undoing that same per-band dimming trick, not changing hue.
-function fullRampColor(t, out) {
-  return out.copy(pickBand(t).color);
+function fullRampColor(count, out) {
+  return out.copy(BAND_COLORS[pickBandIndex(count)]);
 }
 
 const HOVER_SCALE = 1.2;
@@ -62,7 +60,7 @@ const _scratchMatrix = new THREE.Matrix4();
 const CELL_FILL_FRACTION = 0.05;
 
 export function buildDensityMapGroup(grid) {
-  const { cellSizeLy, radiusLy, cellCount, maxCount, ix, iy, iz, n } = grid;
+  const { cellSizeLy, cellCount, ix, iy, iz, n } = grid;
   const group = new THREE.Group();
   group.name = "densityMap";
 
@@ -80,21 +78,22 @@ export function buildDensityMapGroup(grid) {
 
   const cellCenters = new Float32Array(cellCount * 3);
   const fullColors = new Float32Array(cellCount * 3);
+  const bands = new Uint8Array(cellCount);
 
   const matrix = new THREE.Matrix4();
   const color = new THREE.Color();
-  const maxCountDenom = maxCount || 1;
   matrix.identity(); // every box is the same size — only colour encodes density
   for (let i = 0; i < cellCount; i++) {
-    const t = n[i] / maxCountDenom;
+    const count = n[i];
     const cx = (ix[i] + 0.5) * cellSizeLy, cy = (iy[i] + 0.5) * cellSizeLy, cz = (iz[i] + 0.5) * cellSizeLy;
     cellCenters[i * 3] = cx;
     cellCenters[i * 3 + 1] = cy;
     cellCenters[i * 3 + 2] = cz;
     matrix.setPosition(cx, cy, cz);
     mesh.setMatrixAt(i, matrix);
-    mesh.setColorAt(i, dimmedRampColor(t, color));
-    fullRampColor(t, color);
+    mesh.setColorAt(i, dimmedRampColor(count, color));
+    bands[i] = pickBandIndex(count);
+    fullRampColor(count, color);
     fullColors[i * 3] = color.r;
     fullColors[i * 3 + 1] = color.g;
     fullColors[i * 3 + 2] = color.b;
@@ -104,24 +103,41 @@ export function buildDensityMapGroup(grid) {
   mesh.userData.cellCenters = cellCenters;
   mesh.userData.baseColors = mesh.instanceColor.array.slice();
   mesh.userData.fullColors = fullColors;
+  mesh.userData.bands = bands;
+  // Pristine per-instance colours — baseColors gets zeroed per band as the
+  // colour filter hides bands; this keeps the originals to restore from.
+  mesh.userData.pristineColors = mesh.instanceColor.array.slice();
+  mesh.userData.bandVisible = DENSITY_BANDS.map(() => true);
   group.add(mesh);
 
-  const boundary = new THREE.Mesh(
-    new THREE.SphereGeometry(radiusLy, 32, 20),
-    new THREE.MeshBasicMaterial({ color: 0x909090, wireframe: true, transparent: true, opacity: 0.12 }),
-  );
-  group.add(boundary);
-
-  // Simplified Milky Way backdrop (see milkyway.js) — same group, same
-  // additive/no-depth-write treatment as the cells above, so it renders
-  // together with them rather than as a separately toggled layer.
-  group.add(buildMilkyWayGroup());
+  // The Milky Way backdrop (milkyway.js) is static and shared with the
+  // normal scene — index.html adds one instance directly to the scene and
+  // keeps it out of the swap when entering/leaving density mode, so it's
+  // already there and this group doesn't need its own copy.
 
   return group;
 }
 
 export function getDensityCellCenter(mesh, instanceId, target = new THREE.Vector3()) {
   return target.fromArray(mesh.userData.cellCenters, instanceId * 3);
+}
+
+export function setDensityBandVisible(mesh, bandIndex, visible) {
+  const ud = mesh.userData;
+  if (!ud.bands) return;
+  ud.bandVisible[bandIndex] = visible;
+  const bands = ud.bands, base = ud.baseColors, pristine = ud.pristineColors;
+  const live = mesh.instanceColor.array;
+  for (let i = 0; i < bands.length; i++) {
+    if (bands[i] !== bandIndex) continue;
+    const o = i * 3;
+    const r = visible ? pristine[o] : 0;
+    const g = visible ? pristine[o + 1] : 0;
+    const b = visible ? pristine[o + 2] : 0;
+    base[o] = r; base[o + 1] = g; base[o + 2] = b;
+    live[o] = r; live[o + 1] = g; live[o + 2] = b;
+  }
+  mesh.instanceColor.needsUpdate = true;
 }
 
 export function highlightDensityCell(mesh, instanceId) {

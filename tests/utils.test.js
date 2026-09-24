@@ -1,6 +1,8 @@
 import { describe, test, expect } from 'vitest';
 import {
   plxToLy,
+  pcToLy,
+  bayesianDistancePc,
   degreesToRad,
   getSpectralClass,
   lumClassMult,
@@ -26,6 +28,56 @@ describe('plxToLy', () => {
 
   test('larger parallax = closer star (inverse relationship)', () => {
     expect(plxToLy(100)).toBeLessThan(plxToLy(10));
+  });
+});
+
+// ── pcToLy ────────────────────────────────────────────────────────────────────
+describe('pcToLy', () => {
+  test('1 pc = 3.26156 ly', () => {
+    expect(pcToLy(1)).toBeCloseTo(3.26156);
+  });
+
+  test('1000 pc matches plxToLy(1) (both are 1000 pc / 1 mas parallax)', () => {
+    expect(pcToLy(1000)).toBeCloseTo(plxToLy(1));
+  });
+
+  test('scales linearly', () => {
+    expect(pcToLy(20)).toBeCloseTo(pcToLy(10) * 2);
+  });
+});
+
+// ── bayesianDistancePc ──────────────────────────────────────────────────────────
+describe('bayesianDistancePc', () => {
+  test('a confident, well-measured parallax matches naive 1/parallax (prior barely matters)', () => {
+    // POE ~1000 (0.1% relative error) at 100 pc — the prior's pull is negligible.
+    const naive = 1000 / 10; // 10 mas → 100 pc
+    expect(bayesianDistancePc(10, 0.01, 1350)).toBeCloseTo(naive, 0);
+  });
+
+  test('a non-positive parallax still returns a finite, positive distance', () => {
+    expect(bayesianDistancePc(-0.05, 0.5, 1350)).toBeGreaterThan(0);
+    expect(bayesianDistancePc(0, 0.5, 1350)).toBeGreaterThan(0);
+  });
+
+  test('a noisy parallax is pulled toward the prior scale L, not the naive (unstable) inversion', () => {
+    // parallax_over_error ~1: naive 1/plx is wildly unreliable here.
+    const noisy = bayesianDistancePc(0.2, 0.2, 1350);
+    const naive = 1000 / 0.2; // 5000 pc — the naive estimate this is meant to replace
+    expect(noisy).toBeLessThan(naive);
+    expect(noisy).toBeGreaterThan(0);
+  });
+
+  test('larger length scale pulls the (poorly measured) estimate further out', () => {
+    const shortL = bayesianDistancePc(0.2, 0.2, 500);
+    const longL = bayesianDistancePc(0.2, 0.2, 5000);
+    expect(longL).toBeGreaterThan(shortL);
+  });
+
+  test('invalid inputs (non-positive error or length scale) return null', () => {
+    expect(bayesianDistancePc(1, 0, 1350)).toBeNull();
+    expect(bayesianDistancePc(1, -1, 1350)).toBeNull();
+    expect(bayesianDistancePc(1, 0.1, 0)).toBeNull();
+    expect(bayesianDistancePc(1, 0.1, -100)).toBeNull();
   });
 });
 

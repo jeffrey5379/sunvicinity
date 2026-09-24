@@ -1,5 +1,18 @@
-HYADES|1.295 1.175|150|1.292 1.157
-PLEIADES|1.16 1.0|442|1.159 0.994
-BEEHIVE|1.228 2.277|600|1.2272 2.2728
-IC 2391|2.492 2.28|490|2.491 2.274
-NGC 3532|2.596 2.906|1550|2.5958 2.902
+HYADES|1.295 1.175|150|The age of the Hyades is estimated to be about 625 million years. The core of the cluster, where stars are the most densely packed, has a radius of 8.8 light-years, and the cluster's tidal radius is 33 light-years.
+PLEIADES|1.16 1.0|442|The cluster is dominated by hot blue luminous stars that have formed within the last 100 million years. Astronomers estimate that the cluster will survive for approximately another 250 million years, after which the clustering will be lost due to gravitational interactions with the galactic neighborhood.
+BEEHIVE|1.228 2.277|600|Age and proper motion of the Beehive Cluster coincide with those of the Hyades, suggesting they may share similar origins. Both clusters also contain red giants and white dwarfs, which represent later stages of stellar evolution, along with many main sequence stars.
+IC 2391|2.492 2.28|490|IC 2391 is an open cluster in the constellation Vela consisting of hot, young, blueish stars, some of which binaries and one of which is a quadruple.
+NGC 3532|2.596 2.906|1550|NGC 3532 is an open cluster in the constellation Carina. Its population of approximately 150 stars of 7th magnitude or fainter includes seven red giants and seven white dwarfs.
+STOCK 2|0.531 0.59|1217|Stock 2 is a large, sparse open star cluster located primarily in the constellation Cassiopeia. It is named after astronomer Jürgen Stock, who compiled a list of 24 open clusters in the 1950s.
+MELOTTE 20|0.716 0.924|568|Melotte 20 is an open cluster of stars in the northern constellation of Perseus. It has a core radius of 11 ly, a half-mass radius of 18 ly, and a tidal radius of 70 ly, with 517 members being identified within the latter.
+BUTTERFLY|2.134 4.63|1500|The Butterfly Cluster is an open cluster of stars in the southern constellation of Scorpius. Modern measurements show its total visual brightness to be magnitude 4.2. The cluster is estimated to be 94 million years old.
+MESSIER 7|2.179 4.69|911|Messier 7 is an open cluster of stars in the constellation of Scorpius. The tidal radius of the cluster is 40 ly and it has a combined mass of about 735 times the mass of the Sun.
+MESSIER 35|1.146 1.612|2740|Messier 35 is a relatively close open cluster of stars in the west of Gemini. The mass within the central 12 ly was found to be between 1600 and 3200 solar masses. There are 305 stars that are extremely likely to be members of the cluster.
+NGC 3114|2.618 2.627|3300|NGC 3114 is a sparse open cluster which is projected onto the outskirts of the Carina complex. The cluster is estimated to be about 150 million years old.
+MESSIER 93|1.987 2.029|3267|Messier 93 is an open cluster in the modestly southern constellation Puppis. M93 has a great spatial radius of 10 light-years, a tidal radius of 13 ly and a core radius of 4 ly. Its age is estimated at 387 million years.
+NGC 2516|2.631 2.087|1332|NGC 2516 is a cluster in the southern constellation of Carina. It contains two 5th magnitude red giant stars and three main visual double stars.
+NGC 1647|1.237 1.248|1915|NGC 1647 is a cluster in the constellation of Taurus. It contains nearly 90 stars. NGC 1647 is located behind the Taurus dark nebula complex. Its age is estimated to be 150 million years.
+MESSIER 50|1.717 1.846|3100|Messier 50 is a cluster in the constellation Monoceros. The cluster has 508 confirmed and 109 probable members. The cluster has a combined mass of about 285 times the mass of the Sun. It is around 140 million years old.
+MESSIER 48|1.671 2.155|2503|Messier 48 is a cluster in the equatorial constellation of Hydra. The cluster has a tidal radius of 63 ly with at least 438 members.
+NGC 6124|2.28 4.301|1990|NGC 6124 is a cluster 1860 light years away in the constellation Scorpius. The cluster is large and bright, with about 125 stars visible.
+NGC 2477|2.244 2.061|4747|NGC 2477 is a cluster in the constellation of Puppis. This cluster contains about 300 stars, and its age has been estimated at 700 million years.

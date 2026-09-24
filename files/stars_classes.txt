@@ -1,4 +1,4 @@
-B kB OB (B sdB O sdO|0xb0b0f5
+B kB knB OB (B sdB O sdO|0xb0b0f5
 A W D ?+D hA kA knA dC sdA (A|0xccccff
 F sdF kF keF dF sd+F hF sd:F sd?F (F|0xffffe1
 G sdG sd?G gG sd:G mid-G (G|0xffffc1

@@ -27,13 +27,11 @@ export function openDb(dbPath = DEFAULT_DB_PATH) {
   db.function("classifySpType", (spType) => getSpectralClass(spType));
   db.exec(`
     CREATE TABLE IF NOT EXISTS stars (
-      gaia_source_id   TEXT PRIMARY KEY,
+      main_id          TEXT PRIMARY KEY,
       distance_ly      REAL,
       otype            TEXT,
       sp_type          TEXT,
-      main_id          TEXT,
       diameter_solar   REAL,
-      pinned           INTEGER NOT NULL DEFAULT 0,
       x_ly             REAL,
       y_ly             REAL,
       z_ly             REAL,
@@ -43,15 +41,18 @@ export function openDb(dbPath = DEFAULT_DB_PATH) {
     -- fed distance_ly at sync time; ra/dec only fed x_ly/y_ly/z_ly). Sync
     -- code still passes them as row fields — SQLite ignores the extra
     -- bind params — but they are no longer stored.
-    CREATE INDEX IF NOT EXISTS idx_stars_distance ON stars(distance_ly);
-
-    CREATE INDEX IF NOT EXISTS idx_stars_main_id ON stars(main_id);
-
-    CREATE INDEX IF NOT EXISTS idx_stars_pinned ON stars(gaia_source_id) WHERE pinned = 1;
   `);
-  ensureXyzColumns(db);
   ensureSpectralClassColumn(db);
+  // distance_ly and idx_stars_distance exist only during a build (the
+  // shell-range scan in getShellRows) — resync-all's
+  // dropDistanceLy() removes both at the end. Only (re)create the index
+  // while the column is still there, so openDb() on a finished, trimmed db
+  // doesn't fail trying to index a column that's gone.
+  if (db.prepare(`PRAGMA table_info(stars)`).all().some((c) => c.name === "distance_ly")) {
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_stars_distance ON stars(distance_ly)`);
+  }
   ensureRtree(db);
+  backfillRtree(db);
   backfillMissingSpectralClass(db);
   ensureRareRtree(db);
   backfillRareRtree(db);
@@ -66,20 +67,28 @@ export function openDbReadOnly(dbPath = DEFAULT_DB_PATH) {
   return db;
 }
 
-function ensureXyzColumns(db) {
-  const columns = db.prepare(`PRAGMA table_info(stars)`).all().map((c) => c.name);
-  for (const column of ["x_ly", "y_ly", "z_ly"]) {
-    if (!columns.includes(column)) db.exec(`ALTER TABLE stars ADD COLUMN ${column} REAL`);
-  }
-  // x_ly is now the source of truth for position (ra/dec are gone) and
-  // every insert path fills it, so there is nothing left to backfill.
-  db.exec(`DROP INDEX IF EXISTS idx_stars_missing_xyz`);
+// distance_ly is only read while the db is being built — shell partitioning
+// in getShellRows and the mas->km diameter conversion in sync-simbad.js. A
+// finished, serve-only db never touches it (positions come
+// from x_ly/y_ly/z_ly; it isn't in EXPORT_COLUMNS), so resync-all drops it
+// and its index at the very end and compacts the file. Idempotent — a no-op
+// (no VACUUM) once the column is already gone.
+export function dropDistanceLy(db) {
+  db.exec(`DROP INDEX IF EXISTS idx_stars_distance`);
+  const hasCol = db
+    .prepare(`PRAGMA table_info(stars)`)
+    .all()
+    .some((c) => c.name === "distance_ly");
+  if (!hasCol) return false;
+  db.exec(`ALTER TABLE stars DROP COLUMN distance_ly`);
+  db.exec(`VACUUM`);
+  return true;
 }
 
 function ensureSpectralClassColumn(db) {
   const columns = db.prepare(`PRAGMA table_info(stars)`).all().map((c) => c.name);
   if (!columns.includes("spectral_class")) db.exec(`ALTER TABLE stars ADD COLUMN spectral_class TEXT`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_stars_missing_spectral_class ON stars(gaia_source_id) WHERE spectral_class IS NULL`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_stars_missing_spectral_class ON stars(main_id) WHERE spectral_class IS NULL`);
 
   db.exec(`CREATE INDEX IF NOT EXISTS idx_stars_spectral_class ON stars(spectral_class)`);
 }
@@ -122,6 +131,20 @@ function ensureRtree(db) {
   `);
 }
 
+// One-time bulk population of stars_rtree from rows already in `stars`.
+// The AFTER INSERT/UPDATE triggers above only cover writes made through
+// them one row at a time — a `stars` populated any other way (e.g. a bulk
+// table rebuild done directly in SQL, before these triggers even exist)
+// needs this to catch up. No-op once it holds rows — same pattern as
+// backfillRareRtree/backfillFRtree for their own partitions.
+function backfillRtree(db) {
+  if (db.prepare(`SELECT COUNT(*) AS c FROM stars_rtree`).get().c > 0) return;
+  db.exec(`
+    INSERT INTO stars_rtree (id, minX, maxX, minY, maxY, minZ, maxZ)
+    SELECT rowid, x_ly, x_ly, y_ly, y_ly, z_ly, z_ly FROM stars WHERE x_ly IS NOT NULL
+  `);
+}
+
 function ensureRareRtree(db) {
   db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS stars_rtree_rare USING rtree(
     id, minX, maxX, minY, maxY, minZ, maxZ, minC, maxC
@@ -133,8 +156,7 @@ function ensureRareRtree(db) {
   db.exec(`
     CREATE TRIGGER stars_rtree_rare_ai
     AFTER INSERT ON stars
-    WHEN NEW.x_ly IS NOT NULL AND NEW.pinned = 0
-      AND NEW.spectral_class IN (${RARE_CLASS_IN_SQL})
+    WHEN NEW.x_ly IS NOT NULL AND NEW.spectral_class IN (${RARE_CLASS_IN_SQL})
     BEGIN
       DELETE FROM stars_rtree_rare WHERE id = NEW.rowid;
       INSERT INTO stars_rtree_rare (id, minX, maxX, minY, maxY, minZ, maxZ, minC, maxC)
@@ -153,7 +175,7 @@ function ensureRareRtree(db) {
       INSERT INTO stars_rtree_rare (id, minX, maxX, minY, maxY, minZ, maxZ, minC, maxC)
       SELECT NEW.rowid, NEW.x_ly, NEW.x_ly, NEW.y_ly, NEW.y_ly, NEW.z_ly, NEW.z_ly,
              ${caseSql}, ${caseSql}
-      WHERE NEW.pinned = 0 AND NEW.spectral_class IN (${RARE_CLASS_IN_SQL});
+      WHERE NEW.spectral_class IN (${RARE_CLASS_IN_SQL});
     END;
   `);
 
@@ -175,7 +197,7 @@ function backfillRareRtree(db) {
   const rows = db
     .prepare(
       `SELECT rowid, x_ly, y_ly, z_ly, spectral_class FROM stars
-       WHERE pinned = 0 AND x_ly IS NOT NULL
+       WHERE x_ly IS NOT NULL
          AND spectral_class IN (${RARE_CLASS_IN_SQL})`,
     )
     .all();
@@ -193,7 +215,7 @@ function backfillRareRtree(db) {
   insertMany(rows);
 }
 
-// Companion to ensureRtree holding only class-F, non-pinned stars (see
+// Companion to ensureRtree holding only class-F stars (see
 // F_RTREE_SPECTRAL_CLASS for why F specifically). No class dimension is
 // needed — every row is F, so a box query on it needs no post-filter.
 function ensureFRtree(db) {
@@ -205,8 +227,7 @@ function ensureFRtree(db) {
   db.exec(`
     CREATE TRIGGER stars_rtree_f_ai
     AFTER INSERT ON stars
-    WHEN NEW.x_ly IS NOT NULL AND NEW.pinned = 0
-      AND NEW.spectral_class = '${F_RTREE_SPECTRAL_CLASS}'
+    WHEN NEW.x_ly IS NOT NULL AND NEW.spectral_class = '${F_RTREE_SPECTRAL_CLASS}'
     BEGIN
       DELETE FROM stars_rtree_f WHERE id = NEW.rowid;
       INSERT INTO stars_rtree_f (id, minX, maxX, minY, maxY, minZ, maxZ)
@@ -223,7 +244,7 @@ function ensureFRtree(db) {
       DELETE FROM stars_rtree_f WHERE id = NEW.rowid;
       INSERT INTO stars_rtree_f (id, minX, maxX, minY, maxY, minZ, maxZ)
       SELECT NEW.rowid, NEW.x_ly, NEW.x_ly, NEW.y_ly, NEW.y_ly, NEW.z_ly, NEW.z_ly
-      WHERE NEW.pinned = 0 AND NEW.spectral_class = '${F_RTREE_SPECTRAL_CLASS}';
+      WHERE NEW.spectral_class = '${F_RTREE_SPECTRAL_CLASS}';
     END;
   `);
 
@@ -243,7 +264,7 @@ function backfillFRtree(db) {
   const rows = db
     .prepare(
       `SELECT rowid, x_ly, y_ly, z_ly FROM stars
-       WHERE pinned = 0 AND x_ly IS NOT NULL
+       WHERE x_ly IS NOT NULL
          AND spectral_class = '${F_RTREE_SPECTRAL_CLASS}'`,
     )
     .all();
@@ -260,13 +281,12 @@ function backfillFRtree(db) {
   insertMany(rows);
 }
 
+// main_id is the PRIMARY KEY now, so its uniqueness index can't be
+// deferred the way idx_stars_spectral_class's plain secondary index can —
+// SQLite maintains a PK's B-tree on every write regardless. Only
+// idx_stars_spectral_class is left to drop for the bulk-load window.
 export function dropBulkLoadIndexes(db) {
-  db.exec(`DROP INDEX IF EXISTS idx_stars_main_id`);
   db.exec(`DROP INDEX IF EXISTS idx_stars_spectral_class`);
-}
-
-export function ensureMainIdIndex(db) {
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_stars_main_id ON stars(main_id)`);
 }
 
 export function ensureSpectralClassIndex(db) {
@@ -285,9 +305,9 @@ function backfillMissingSpectralClass(db) {
 
 export function insertPinnedStars(db, rows) {
   const stmt = db.prepare(`
-    INSERT INTO stars (gaia_source_id, distance_ly, otype, sp_type, main_id, diameter_solar, pinned, x_ly, y_ly, z_ly, spectral_class)
-    VALUES (@gaiaSourceId, @distanceLy, @otype, @spType, @mainId, @diameterSolar, 1, @xLy, @yLy, @zLy, @spectralClass)
-    ON CONFLICT(gaia_source_id) DO NOTHING
+    INSERT INTO stars (main_id, distance_ly, otype, sp_type, diameter_solar, x_ly, y_ly, z_ly, spectral_class)
+    VALUES (@mainId, @distanceLy, @otype, @spType, @diameterSolar, @xLy, @yLy, @zLy, @spectralClass)
+    ON CONFLICT(main_id) DO NOTHING
   `);
   const insertMany = db.transaction((items) => {
     for (const row of items) {
@@ -307,16 +327,15 @@ export function insertPinnedStars(db, rows) {
 
 export function upsertGaiaRows(db, rows) {
   const stmt = db.prepare(`
-    INSERT INTO stars (gaia_source_id, distance_ly, sp_type, spectral_class, x_ly, y_ly, z_ly)
-    VALUES (@gaiaSourceId, @distanceLy, @spType, @spectralClass, @xLy, @yLy, @zLy)
-    ON CONFLICT(gaia_source_id) DO UPDATE SET
+    INSERT INTO stars (main_id, distance_ly, sp_type, spectral_class, x_ly, y_ly, z_ly)
+    VALUES (@mainId, @distanceLy, @spType, @spectralClass, @xLy, @yLy, @zLy)
+    ON CONFLICT(main_id) DO UPDATE SET
       distance_ly = excluded.distance_ly,
       sp_type = excluded.sp_type,
       spectral_class = excluded.spectral_class,
       x_ly = excluded.x_ly,
       y_ly = excluded.y_ly,
       z_ly = excluded.z_ly
-    WHERE pinned = 0
   `);
   const insertMany = db.transaction((items) => {
     for (const row of items) {
@@ -333,14 +352,26 @@ export function updateSimbadRows(db, rows) {
     UPDATE stars
     SET otype = @otype,
         sp_type = COALESCE(@spType, sp_type),
-        main_id = @mainId,
+        -- Keep the current main_id if SIMBAD gave no name at all, or if
+        -- some OTHER row already has the new one — two distinct Gaia
+        -- sources (e.g. wide-binary components) can come back from
+        -- SIMBAD's ident/basic join with the same main_id; the first one
+        -- to claim it keeps it, the other stays under its own numeric id
+        -- rather than collide with it (main_id is the PRIMARY KEY now).
+        main_id = CASE
+          WHEN @newMainId IS NULL THEN main_id
+          WHEN NOT EXISTS (
+            SELECT 1 FROM stars s2 WHERE s2.main_id = @newMainId AND s2.main_id != @oldMainId
+          ) THEN @newMainId
+          ELSE main_id
+        END,
         diameter_solar = @diameterSolar,
         spectral_class = classifySpType(COALESCE(@spType, sp_type))
-    WHERE gaia_source_id = @gaiaSourceId AND pinned = 0
+    WHERE main_id = @oldMainId
   `);
   const updateMany = db.transaction((items) => {
     for (const row of items) {
-      stmt.run({ ...row, mainId: normalizeMainId(row.mainId) });
+      stmt.run({ ...row, oldMainId: row.gaiaSourceId, newMainId: normalizeMainId(row.mainId) });
     }
   });
   updateMany(rows);
@@ -348,20 +379,9 @@ export function updateSimbadRows(db, rows) {
 
 export function insertSimbadDiscoveredRows(db, rows) {
   const stmt = db.prepare(`
-    INSERT INTO stars
-      (gaia_source_id, distance_ly, otype, sp_type, main_id, diameter_solar, x_ly, y_ly, z_ly, spectral_class)
-    VALUES
-      (@mainId, @distanceLy, @otype, @spType, @mainId, @diameterSolar, @xLy, @yLy, @zLy, @spectralClass)
-    ON CONFLICT(gaia_source_id) DO UPDATE SET
-      distance_ly = excluded.distance_ly,
-      otype = excluded.otype,
-      sp_type = excluded.sp_type,
-      diameter_solar = excluded.diameter_solar,
-      x_ly = excluded.x_ly,
-      y_ly = excluded.y_ly,
-      z_ly = excluded.z_ly,
-      spectral_class = excluded.spectral_class
-    WHERE pinned = 0
+    INSERT INTO stars (main_id, distance_ly, otype, sp_type, diameter_solar, x_ly, y_ly, z_ly, spectral_class)
+    VALUES (@mainId, @distanceLy, @otype, @spType, @diameterSolar, @xLy, @yLy, @zLy, @spectralClass)
+    ON CONFLICT(main_id) DO NOTHING
   `);
   const insertMany = db.transaction((items) => {
     for (const row of items) {
@@ -384,48 +404,11 @@ export function findExistingStarIds(db, candidateIds) {
   insertMany(candidateIds);
 
   const rows = db
-    .prepare(
-      `SELECT gaia_source_id FROM stars
-       WHERE gaia_source_id IN (SELECT id FROM _existing_check)
-          OR main_id IN (SELECT id FROM _existing_check)`,
-    )
+    .prepare(`SELECT main_id FROM stars WHERE main_id IN (SELECT id FROM _existing_check)`)
     .all();
 
   db.exec(`DROP TABLE _existing_check`);
-  return rows.map((r) => r.gaia_source_id);
-}
-
-export function clearSimbadRows(db, gaiaSourceIds) {
-  const stmt = db.prepare(`
-    UPDATE stars
-    SET otype = NULL, main_id = NULL, diameter_solar = NULL
-    WHERE gaia_source_id = @gaiaSourceId AND pinned = 0
-  `);
-  const updateMany = db.transaction((ids) => {
-    for (const id of ids) stmt.run({ gaiaSourceId: id });
-  });
-  updateMany(gaiaSourceIds);
-}
-
-export function pruneShellRows(db, minLy, maxLy, keepGaiaSourceIds) {
-  db.exec(`CREATE TEMP TABLE IF NOT EXISTS _sync_keep (gaia_source_id TEXT PRIMARY KEY)`);
-  db.exec(`DELETE FROM _sync_keep`);
-  const insertKeep = db.prepare(`INSERT OR IGNORE INTO _sync_keep (gaia_source_id) VALUES (?)`);
-  const insertMany = db.transaction((ids) => {
-    for (const id of ids) insertKeep.run(id);
-  });
-  insertMany(keepGaiaSourceIds);
-
-  const result = db
-    .prepare(
-      `DELETE FROM stars
-       WHERE distance_ly >= ? AND distance_ly < ? AND pinned = 0
-         AND gaia_source_id NOT IN (SELECT gaia_source_id FROM _sync_keep)`,
-    )
-    .run(minLy, Number.isFinite(maxLy) ? maxLy : INF_LY);
-
-  db.exec(`DROP TABLE _sync_keep`);
-  return result.changes;
+  return rows.map((r) => r.main_id);
 }
 
 const INF_LY = 1e15; // stand-in for Infinity — SQLite has no notion of it
@@ -433,12 +416,12 @@ const INF_LY = 1e15; // stand-in for Infinity — SQLite has no notion of it
 export function getShellRows(db, minLy, maxLy) {
   return db
     .prepare(
-      `SELECT * FROM stars WHERE distance_ly >= ? AND distance_ly < ? AND pinned = 0 ORDER BY distance_ly`,
+      `SELECT * FROM stars WHERE distance_ly >= ? AND distance_ly < ? ORDER BY distance_ly`,
     )
     .all(minLy, Number.isFinite(maxLy) ? maxLy : INF_LY);
 }
 
-const EXPORT_COLUMNS = `gaia_source_id, otype, sp_type, main_id, diameter_solar, x_ly, y_ly, z_ly`;
+const EXPORT_COLUMNS = `main_id, otype, sp_type, diameter_solar, x_ly, y_ly, z_ly`;
 
 const stmtCacheByDb = new WeakMap();
 function prep(db, sql) {
@@ -455,12 +438,8 @@ function prep(db, sql) {
   return stmt;
 }
 
-export function getPinnedRowsForExport(db) {
-  return prep(db, `SELECT ${EXPORT_COLUMNS} FROM stars WHERE pinned = 1 ORDER BY gaia_source_id`).all();
-}
-
 export function searchStarByNameForExport(db, name) {
-  return prep(db, `SELECT ${EXPORT_COLUMNS} FROM stars WHERE main_id = ? AND pinned = 0 LIMIT 1`).get(name);
+  return prep(db, `SELECT ${EXPORT_COLUMNS} FROM stars WHERE main_id = ? LIMIT 1`).get(name);
 }
 
 export function getRowsNearPointForExport(db, x, y, z, radiusLy, extraWhereSql = "1=1", extraParams = []) {
@@ -474,7 +453,6 @@ export function getRowsNearPointForExport(db, x, y, z, radiusLy, extraWhereSql =
        WHERE r.minX >= ? AND r.minX <= ?
          AND r.minY >= ? AND r.minY <= ?
          AND r.minZ >= ? AND r.minZ <= ?
-         AND s.pinned = 0
          AND (${extraWhereSql})
          AND (s.x_ly - ?) * (s.x_ly - ?) + (s.y_ly - ?) * (s.y_ly - ?) + (s.z_ly - ?) * (s.z_ly - ?)
              <= MIN(?, maxVisDistSq(s.sp_type))`,
@@ -503,7 +481,6 @@ export function getRowsNearPointByRareClassForExport(db, x, y, z, radiusLy, spec
          AND r.minY >= ? AND r.maxY <= ?
          AND r.minZ >= ? AND r.maxZ <= ?
          AND r.minC >= ? AND r.maxC <= ?
-         AND s.pinned = 0
          AND (s.x_ly - ?) * (s.x_ly - ?) + (s.y_ly - ?) * (s.y_ly - ?) + (s.z_ly - ?) * (s.z_ly - ?)
              <= MIN(?, maxVisDistSq(s.sp_type))`,
   )
@@ -533,7 +510,6 @@ export function getRowsNearPointInFRtreeForExport(db, x, y, z, radiusLy) {
        WHERE r.minX >= ? AND r.maxX <= ?
          AND r.minY >= ? AND r.maxY <= ?
          AND r.minZ >= ? AND r.maxZ <= ?
-         AND s.pinned = 0
          AND (s.x_ly - ?) * (s.x_ly - ?) + (s.y_ly - ?) * (s.y_ly - ?) + (s.z_ly - ?) * (s.z_ly - ?)
              <= MIN(?, maxVisDistSq(s.sp_type))`,
   )
@@ -546,79 +522,25 @@ export function getRowsNearPointInFRtreeForExport(db, x, y, z, radiusLy) {
     );
 }
 
-export function getNearestStarForExport(db, x, y, z, spectralClasses, startRadiusLy, maxRadiusLy) {
+export function getNearestStarForExport(db, x, y, z, radiusLy) {
   const columns = EXPORT_COLUMNS.split(", ")
     .map((c) => `s.${c}`)
     .join(", ");
-  const distExpr =
-    "(s.x_ly - ?) * (s.x_ly - ?) + (s.y_ly - ?) * (s.y_ly - ?) + (s.z_ly - ?) * (s.z_ly - ?)";
-
-  const want = new Set(spectralClasses);
-  const obaCodes = ["O", "B", "A"].filter((c) => want.has(c)).map((c) => RARE_CLASS_CODE[c]);
-  const rareStmt = obaCodes.length
-    ? prep(
-        db,
-        `SELECT ${columns}
-         FROM stars_rtree_rare r
-         JOIN stars s ON s.rowid = r.id
-         WHERE r.minX >= ? AND r.maxX <= ?
-           AND r.minY >= ? AND r.maxY <= ?
-           AND r.minZ >= ? AND r.maxZ <= ?
-           AND r.minC >= ? AND r.maxC <= ?
-         ORDER BY ${distExpr}
-         LIMIT 1`,
-      )
-    : null;
-  const minC = obaCodes.length ? Math.min(...obaCodes) : 0;
-  const maxC = obaCodes.length ? Math.max(...obaCodes) : 0;
-
-  const fStmt = want.has("F")
-    ? prep(
-        db,
-        `SELECT ${columns}
-         FROM stars_rtree_f r
-         JOIN stars s ON s.rowid = r.id
-         WHERE r.minX >= ? AND r.maxX <= ?
-           AND r.minY >= ? AND r.maxY <= ?
-           AND r.minZ >= ? AND r.maxZ <= ?
-         ORDER BY ${distExpr}
-         LIMIT 1`,
-      )
-    : null;
-
-  let best = null;
-  let bestD2 = Infinity;
-  const consider = (row) => {
-    if (!row) return;
-    const dx = row.x_ly - x, dy = row.y_ly - y, dz = row.z_ly - z;
-    const d2 = dx * dx + dy * dy + dz * dz;
-    if (d2 < bestD2) {
-      best = row;
-      bestD2 = d2;
-    }
-  };
-
-  for (let radius = startRadiusLy; radius <= maxRadiusLy; radius *= 2) {
-    if (rareStmt) {
-      consider(rareStmt.get(
-        x - radius, x + radius,
-        y - radius, y + radius,
-        z - radius, z + radius,
-        minC, maxC,
-        x, x, y, y, z, z,
-      ));
-    }
-    if (fStmt) {
-      consider(fStmt.get(
-        x - radius, x + radius,
-        y - radius, y + radius,
-        z - radius, z + radius,
-        x, x, y, y, z, z,
-      ));
-    }
-    if (best) return best;
-  }
-  return best;
+  return prep(
+    db,
+    `SELECT ${columns} FROM stars s NOT INDEXED
+       JOIN stars_rtree r ON r.id = s.rowid
+      WHERE r.minX >= ? AND r.minX <= ?
+        AND r.minY >= ? AND r.minY <= ?
+        AND r.minZ >= ? AND r.minZ <= ?
+      ORDER BY (s.x_ly - ?) * (s.x_ly - ?) + (s.y_ly - ?) * (s.y_ly - ?) + (s.z_ly - ?) * (s.z_ly - ?)
+      LIMIT 1`,
+  ).get(
+    x - radiusLy, x + radiusLy,
+    y - radiusLy, y + radiusLy,
+    z - radiusLy, z + radiusLy,
+    x, x, y, y, z, z,
+  );
 }
 
 export function getRowsByMainIdsForExport(db, mainIds) {
@@ -627,7 +549,7 @@ export function getRowsByMainIdsForExport(db, mainIds) {
   return prep(
     db,
     `SELECT ${EXPORT_COLUMNS} FROM stars
-     WHERE main_id IN (${placeholders}) AND pinned = 0
-     ORDER BY gaia_source_id`,
+     WHERE main_id IN (${placeholders})
+     ORDER BY main_id`,
   ).all(...mainIds);
 }

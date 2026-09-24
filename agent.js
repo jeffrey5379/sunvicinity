@@ -1,6 +1,8 @@
 const StarAgent = (() => {
   // ─── State ───────────────────────────────────────────────────────────────────
   let _controls, _stars, _names;
+  let _search = null; // index.html's searchStarOnServer(name) — fetches a star
+  // the client catalog doesn't have yet, merges it in, returns the view
   let _navigator = null; // set via setNavigator() — wraps index.html's recenter()
   let _activeStar = null; // SIMBAD id of the star currently in focus (set by click or navigate)
   const _conversationHistory = [];
@@ -119,20 +121,35 @@ const StarAgent = (() => {
 
   // ─── Tool helper functions ───────────────────────────────────────────────────
 
-  function findStar(name) {
+  async function findStar(name) {
     if (!name) return null;
     const n = name.toLowerCase().trim();
+
     let found = _stars.findByName(name);
     if (found) return found;
-    // Match by common name via the ghb names table
+
+    // Common name -> SIMBAD code via files/stars_names.txt
     const alias = _names.find((e) => e.name.toLowerCase() === n);
-    if (alias) found = _stars.findByName(alias.code);
-    if (found) return found;
+    if (alias) {
+      found = _stars.findByName(alias.code);
+      if (found) return found;
+    }
+
+    // Substring match against whatever's already loaded on the client
     found = _stars.find(
       (s) =>
         s.name.toLowerCase().includes(n) ||
         (s.secondName && s.secondName.toLowerCase().includes(n)),
     );
+    if (found) return found;
+
+    // Not in the client catalog yet — ask the server (it merges the star
+    // into _stars and hands back the view). The search endpoint matches
+    // main_id exactly, so try the resolved SIMBAD code first.
+    if (_search) {
+      found = await _search(alias ? alias.code : name);
+      if (!found && alias) found = await _search(name);
+    }
     return found || null;
   }
 
@@ -157,7 +174,7 @@ const StarAgent = (() => {
 
   const toolHandlers = {
     navigate_to_star: async ({ star_name }) => {
-      const star = findStar(star_name);
+      const star = await findStar(star_name);
       if (!star)
         return { error: `Star "${star_name}" not found in the dataset` };
       if (!star.position)
@@ -183,7 +200,7 @@ const StarAgent = (() => {
     get_nearby_stars: async ({ radius_ly, from_star, limit = 10 }) => {
       let origin;
       if (from_star) {
-        const s = findStar(from_star);
+        const s = await findStar(from_star);
         if (!s) return { error: `Star "${from_star}" not found` };
         origin = s.position;
       } else {
@@ -261,7 +278,7 @@ const StarAgent = (() => {
     },
 
     get_star_details: async ({ star_name }) => {
-      const star = findStar(star_name);
+      const star = await findStar(star_name);
       if (!star) return { error: `Star "${star_name}" not found` };
 
       return {
@@ -281,7 +298,7 @@ const StarAgent = (() => {
     },
 
     plan_tour: async ({ stops, pause_seconds = 4 }) => {
-      const found = stops.map((name) => findStar(name)).filter(Boolean);
+      const found = (await Promise.all(stops.map((name) => findStar(name)))).filter(Boolean);
       if (found.length === 0)
         return { error: "None of the listed stars were found in the dataset" };
       if (!_navigator) return { error: "Scene navigator not available" };
@@ -470,10 +487,11 @@ Communication style: warm, enthusiastic, slightly whimsical — like a seasoned 
 
   // ─── Public API ──────────────────────────────────────────────────────────────
 
-  function init({ controls, stars, names }) {
+  function init({ controls, stars, names, search }) {
     _controls = controls;
     _stars = stars;
     _names = names || [];
+    _search = search || null;
     createUI();
   }
 

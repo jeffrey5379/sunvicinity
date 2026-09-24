@@ -11,12 +11,11 @@
     "test": "vitest run",
     "server": "node server/index.js",
     "bench:nearby": "node scripts/bench-nearby.js",
-    "sync:gaia": "node scripts/sync-gaia.js",
-    "sync:simbad": "node scripts/sync-simbad.js",
     "seed:constellation-stars": "node scripts/seed-constellation-stars.js",
     "resync:all": "node scripts/resync-all.js",
     "build:density-grid": "node scripts/build-density-grid.js",
-    "download:gaia": "node scripts/download-gaia-archive.js"
+    "download:gaia": "node scripts/download-gaia-archive.js",
+    "calibrate:distance-prior": "node scripts/calibrate-distance-prior.js"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

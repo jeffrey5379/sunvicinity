@@ -1,5 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
 
+:root {
+	/* Shared tone for the minimap frame, its constellation lines and labels. */
+	--minimap-color: #606060;
+}
+
 body {
 	margin: 0;
 	background-color: #000;
@@ -83,4 +88,57 @@ canvas {
 
 .hidden {
 	display: none !important;
+}
+
+.lil-gui .controller.density-bands .widget {
+	gap: 10px;
+}
+
+.lil-gui .controller.density-bands input[type="checkbox"] {
+	width: 15px;
+	height: 15px;
+	margin: 0;
+	flex: 0 0 auto;
+	cursor: pointer;
+	outline-offset: 0;
+}
+
+#minimap-coords {
+	position: absolute;
+	color: var(--minimap-color);
+	font-size: 11px;
+	line-height: 1.3;
+	white-space: nowrap;
+	pointer-events: none;
+	z-index: 1;
+	display: none;
+}
+
+#minimap {
+	position: absolute;
+	right: 10px;
+	bottom: 10px;
+	width: 300px;
+	height: 220px;
+	border: 1px solid var(--minimap-color);
+	pointer-events: none;
+	z-index: 1;
+	display: none;
+	overflow: hidden;
+}
+
+#minimap canvas {
+	display: block;
+	width: 100% !important;
+	height: 100% !important;
+}
+
+.minimap-label {
+	position: absolute;
+	transform: translate(-50%, -50%);
+	color: var(--minimap-color);
+	font-size: 10px;
+	line-height: 1;
+	white-space: nowrap;
+	pointer-events: none;
 }
