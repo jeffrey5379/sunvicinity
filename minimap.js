@@ -10,6 +10,7 @@ export const Minimap = (() => {
 
   let container, coordsEl, renderer, scene, cam, dot, lineMat;
   let lines = [], labels = [], ready = false;
+  let lastRaDegrees = null, lastDecDegrees = null; // skip the DOM write below when the target hasn't moved
   const _v = new THREE.Vector3();
 
   function init(el, coordsElArg) {
@@ -34,6 +35,8 @@ export const Minimap = (() => {
   }
 
   function resize() {
+    lastRaDegrees = null;
+    lastDecDegrees = null;
     const w = container.clientWidth || 260, h = container.clientHeight || 200;
     renderer.setSize(w, h, false);
     cam.aspect = w / h;
@@ -104,15 +107,17 @@ export const Minimap = (() => {
     }
 
     if (coordsEl) {
+      coordsEl.style.display = "block";
       const t = controls.target;
       const { raDegrees, decDegrees } = xyzToRaDec(t.x, t.y, t.z);
-      coordsEl.textContent = "ra: " + formatRaHMS(raDegrees) + "  dec: " + formatDecDMS(decDegrees);
-      coordsEl.style.display = "block";
-      // Positioned from the minimap frame's own live rect (not a hardcoded
-      // offset) so it tracks the frame's left edge whatever size it's given.
-      const rect = container.getBoundingClientRect();
-      coordsEl.style.left = rect.left + "px";
-      coordsEl.style.top = (rect.top - COORDS_GAP - coordsEl.offsetHeight) + "px";
+      if (raDegrees !== lastRaDegrees || decDegrees !== lastDecDegrees) {
+        lastRaDegrees = raDegrees;
+        lastDecDegrees = decDegrees;
+        coordsEl.textContent = "ra: " + formatRaHMS(raDegrees) + "  dec: " + formatDecDMS(decDegrees);
+        const rect = container.getBoundingClientRect();
+        coordsEl.style.left = rect.left + "px";
+        coordsEl.style.top = (rect.top - COORDS_GAP - coordsEl.offsetHeight) + "px";
+      }
     }
   }
 

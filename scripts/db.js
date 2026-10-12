@@ -257,8 +257,6 @@ function ensureFRtree(db) {
   `);
 }
 
-// One-time population of stars_rtree_f (~5M rows, ~80s) from rows already
-// in `stars`; no-op once it holds rows. See backfillRareRtree.
 function backfillFRtree(db) {
   if (db.prepare(`SELECT COUNT(*) AS c FROM stars_rtree_f`).get().c > 0) return;
   const rows = db

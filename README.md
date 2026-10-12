@@ -1,6 +1,6 @@
 # Sun Vicinity
 
-An interactive 3D visualization of the Sun's stellar neighborhood with 78 million real stars from Gaia DR3 and SIMBAD
+An interactive 3D visualization of the Sun's stellar neighborhood with 90 million real stars from Gaia DR3 and SIMBAD
 
 ## Features
 

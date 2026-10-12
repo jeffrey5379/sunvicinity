@@ -4,6 +4,8 @@ import {
   pcToLy,
   bayesianDistancePc,
   degreesToRad,
+  raDecDistanceToXyz,
+  xyzToRaDec,
   getSpectralClass,
   lumClassMult,
   giantBrightnessMult,
@@ -101,6 +103,67 @@ describe('degreesToRad', () => {
 
   test('negative degrees work correctly', () => {
     expect(degreesToRad(-90)).toBeCloseTo(-Math.PI / 2);
+  });
+});
+
+// ── raDecDistanceToXyz ──────────────────────────────────────────────────────────
+describe('raDecDistanceToXyz', () => {
+  test('ra=0, dec=0 points straight down +z', () => {
+    expect(raDecDistanceToXyz(0, 0, 5)).toEqual({ x: expect.closeTo(0), y: expect.closeTo(0), z: expect.closeTo(5) });
+  });
+
+  test('ra=90, dec=0 points along +x', () => {
+    const { x, y, z } = raDecDistanceToXyz(90, 0, 5);
+    expect(x).toBeCloseTo(5);
+    expect(y).toBeCloseTo(0);
+    expect(z).toBeCloseTo(0);
+  });
+
+  test('dec=90 (north pole) points along +y regardless of ra', () => {
+    for (const ra of [0, 45, 123, 300]) {
+      const { x, y, z } = raDecDistanceToXyz(ra, 90, 5);
+      expect(x).toBeCloseTo(0);
+      expect(y).toBeCloseTo(5);
+      expect(z).toBeCloseTo(0);
+    }
+  });
+
+  test('dec=-90 (south pole) points along -y', () => {
+    const { x, y, z } = raDecDistanceToXyz(200, -90, 5);
+    expect(x).toBeCloseTo(0);
+    expect(y).toBeCloseTo(-5);
+    expect(z).toBeCloseTo(0);
+  });
+
+  test('distance=0 collapses to the origin regardless of ra/dec', () => {
+    const { x, y, z } = raDecDistanceToXyz(37, -22, 0);
+    expect(x).toBeCloseTo(0);
+    expect(y).toBeCloseTo(0);
+    expect(z).toBeCloseTo(0);
+  });
+
+  test('magnitude of the result always equals the input distance', () => {
+    for (const [ra, dec, d] of [[37, 22, 10], [200, -45, 3.5], [359, 89, 1000]]) {
+      const { x, y, z } = raDecDistanceToXyz(ra, dec, d);
+      expect(Math.sqrt(x * x + y * y + z * z)).toBeCloseTo(d);
+    }
+  });
+
+  test('ra wraps the same as ra+360 (sin/cos are periodic)', () => {
+    const a = raDecDistanceToXyz(-30, 15, 7);
+    const b = raDecDistanceToXyz(330, 15, 7);
+    expect(a.x).toBeCloseTo(b.x);
+    expect(a.y).toBeCloseTo(b.y);
+    expect(a.z).toBeCloseTo(b.z);
+  });
+
+  test('round-trips through xyzToRaDec (documented inverse)', () => {
+    for (const [ra, dec, d] of [[123.4, -45.6, 7.8], [0.1, 0, 50], [271, 60, 200]]) {
+      const { x, y, z } = raDecDistanceToXyz(ra, dec, d);
+      const back = xyzToRaDec(x, y, z);
+      expect(back.raDegrees).toBeCloseTo(ra, 5);
+      expect(back.decDegrees).toBeCloseTo(dec, 5);
+    }
   });
 });
 
