@@ -14,17 +14,26 @@ terraform {
   required_providers {
     aws = { source = "hashicorp/aws", version = "~> 5.0" }
   }
+
+  backend "s3" {
+    bucket  = "sunvicinity-a83808db"
+    key     = "deploy/terraform.tfstate"
+    region  = "us-east-1"
+    encrypt = true
+  }
 }
 
 provider "aws" {
   region = var.region
 }
 
-# Bucket name / key come straight from the bootstrap stack's state — no
-# copy-pasting. `terraform apply` here fails clearly if bootstrap hasn't run.
 data "terraform_remote_state" "bootstrap" {
-  backend = "local"
-  config  = { path = "${path.module}/../bootstrap/terraform.tfstate" }
+  backend = "s3"
+  config = {
+    bucket = "sunvicinity-a83808db"
+    key    = "bootstrap/terraform.tfstate"
+    region = "us-east-1"
+  }
 }
 
 data "aws_availability_zones" "available" {

@@ -4,6 +4,13 @@ terraform {
     aws    = { source = "hashicorp/aws", version = "~> 5.0" }
     random = { source = "hashicorp/random", version = "~> 3.0" }
   }
+
+  backend "s3" {
+    bucket  = "sunvicinity-a83808db"
+    key     = "bootstrap/terraform.tfstate"
+    region  = "us-east-1"
+    encrypt = true
+  }
 }
 
 provider "aws" {
