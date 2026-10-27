@@ -45,3 +45,15 @@ variable "repo_branch" {
   type        = string
   default     = "main"
 }
+
+variable "domain_name" {
+  description = "Public domain pointed at elastic_ip (A record). Caddy uses it as the site address and auto-provisions a Let's Encrypt cert. Leave \"\" to stay on plain HTTP. Set in terraform.tfvars (gitignored) — not a shared default."
+  type        = string
+  default     = ""
+}
+
+variable "elastic_ip" {
+  description = "Elastic IP already allocated in the AWS account (console or `aws ec2 allocate-address`), associated with the instance here so it survives instance replacement. Set in terraform.tfvars (gitignored) — not a shared default."
+  type        = string
+  default     = ""
+}

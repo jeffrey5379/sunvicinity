@@ -104,6 +104,14 @@ resource "aws_security_group" "app" {
   }
 
   ingress {
+    description = "HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
     description = "SSH"
     from_port   = 22
     to_port     = 22
@@ -171,6 +179,7 @@ resource "aws_instance" "app" {
     db_key      = local.db_key
     repo_url    = var.repo_url
     repo_branch = var.repo_branch
+    domain_name = var.domain_name
   })
   # Editing the bootstrap script recreates the instance on next apply.
   user_data_replace_on_change = true
@@ -181,4 +190,13 @@ resource "aws_instance" "app" {
   }
 
   tags = { Name = "sunvicinity" }
+}
+
+data "aws_eip" "app" {
+  public_ip = var.elastic_ip
+}
+
+resource "aws_eip_association" "app" {
+  instance_id   = aws_instance.app.id
+  allocation_id = data.aws_eip.app.id
 }

@@ -17,6 +17,7 @@
       <div id="star-info">
         <span id="distance"></span>
         <span id="star-name"></span>
+        <span id="loading-spinner" class="hidden"></span>
       </div>
       <span id="info">Loading...</span>
     </div>
@@ -33,6 +34,7 @@
       import { OrbitControls } from "three/addons/controls/OrbitControls.js";
       import { createNebula, updateNebula } from "./nebula.js";
       import { buildMilkyWayGroup } from "./milkyway.js";
+      import { buildAndromedaGroup } from "./andromeda.js";
       import { BlackHole, BlackHoleConfig } from "./blackhole.js";
       import { SCluster } from "./s_cluster.js";
       import { StarCatalog } from "./star_catalog.js";
@@ -57,16 +59,18 @@
         CLUSTER_LABEL: "CLUSTER_LABEL",
         BLACK_HOLE: "BLACK_HOLE",
       };
-      const ANIMATION = { RECENTER: "RECENTER", CONS_SWAP: "CONS_SWAP", CLUSTER_ONE: "CLUSTER_ONE", CLUSTER_TWO: "CLUSTER_TWO", DENSITY_ZOOM: "DENSITY_ZOOM" };
+      const ANIMATION = { RECENTER: "RECENTER", CONS_SWAP: "CONS_SWAP", CLUSTER_ONE: "CLUSTER_ONE", CLUSTER_TWO: "CLUSTER_TWO", DENSITY_ZOOM: "DENSITY_ZOOM", INTRO: "INTRO" };
       AnimationRunner.registerHandler(ANIMATION.RECENTER,     tickRecenter);
       AnimationRunner.registerHandler(ANIMATION.CONS_SWAP,    tickConsSwap);
       AnimationRunner.registerHandler(ANIMATION.CLUSTER_ONE,  tickClusterOne);
       AnimationRunner.registerHandler(ANIMATION.CLUSTER_TWO,  tickClusterTwo);
       AnimationRunner.registerHandler(ANIMATION.DENSITY_ZOOM, tickDensityZoom);
-      var scene, camera, controls, renderer, milkyWay;
+      AnimationRunner.registerHandler(ANIMATION.INTRO,        tickIntro);
+      var scene, camera, controls, renderer, milkyWay, andromeda;
       const DEFAULT_RADIUS = 0.001;
       var animationSteps = 200,
         clusterAnimationSteps = 1500,
+        introAnimationSteps = 1000,
         cameraElevation = 10;
       var exposure = 6;
       var constellations = [],
@@ -75,6 +79,7 @@
         minimapLabelData = [],
         lines = [],
         clickableObjects = [],
+        hoverNameOnlyObjects = [],
         conLabelLines = [],
         clusterLabelLines = [];
       var starCatalog = new StarCatalog();
@@ -95,6 +100,7 @@
         clustersToVisit = [];
       var visibleDistance = 1000.0,
         discoverDistance = 100.0;
+      var WAYPOINT_STEP_LY = 500.0;
       var prevUpdate = new THREE.Vector3(),
         _lastDistTarget = new THREE.Vector3(),
         starGeometry = new THREE.IcosahedronGeometry(1, 0);
@@ -103,9 +109,6 @@
         mouseDownX, mouseDownY;
       var recenterStart = null, recenterObject = null;
       var visibilityConfig = null;
-      // CLUSTER_ONE/TWO animation state, set once per cluster click (see the
-      // CLUSTER_LABEL click handler) and read frame-by-frame by
-      // tickClusterOne/tickClusterTwo — no precomputed per-frame arrays.
       var clusterOneCameraStart = new THREE.Vector3(),
         clusterOneCameraEnd = new THREE.Vector3(),
         clusterOneTargetStart = new THREE.Vector3(),
@@ -113,13 +116,17 @@
         clusterTwoRadius = 0,
         clusterTwoStartAngle = 0,
         mainFont;
+      var introAxisU = new THREE.Vector3(),
+        introAxisV = new THREE.Vector3(),
+        introStartRadius = 10,
+        introEndRadius = 3;
       var CLUSTER_ORBIT_RADIUS = 50;
       const delay = (millis) =>
         new Promise((resolve, reject) => {
           setTimeout((_) => resolve(), millis);
         });
       var MOVEMENT_SPEEDS = [0.5, 1.0, 2.0];
-      var DENSITY_MODE_SPEED_BOOST = 8;
+      var DENSITY_MODE_SPEED_BOOST = 10;
       var params = {
         exposure: exposure,
         Mode: "Free",
@@ -139,7 +146,21 @@
       renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
       document.body.appendChild(renderer.domElement);
       const starName = document.getElementById("star-name");
+      const loadingSpinner = document.getElementById("loading-spinner");
       const info = document.getElementById("info");
+      var pendingRequests = 0;
+      function beginLoading() {
+        pendingRequests++;
+        loadingSpinner.classList.remove("hidden");
+      }
+      function endLoading() {
+        pendingRequests = Math.max(0, pendingRequests - 1);
+        if (pendingRequests === 0) loadingSpinner.classList.add("hidden");
+      }
+      function trackedFetch(url, options) {
+        beginLoading();
+        return fetch(url, options).finally(endLoading);
+      }
       let loadStep = 0;
       const LOAD_TOTAL = 9;
       const updateProgressText = () => {
@@ -147,21 +168,31 @@
       };
       var tempMessage, oldText;
       scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 200000.0);
-      camera.position.set(0, 0, 3);
+      camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 5000000.0);
+      introAxisU.randomDirection();
+      var introPlaneHelper = new THREE.Vector3().randomDirection();
+      introAxisV.copy(introPlaneHelper).addScaledVector(introAxisU, -introPlaneHelper.dot(introAxisU));
+      if (introAxisV.lengthSq() < 1e-6) {
+        introPlaneHelper.set(1, 0, 0);
+        introAxisV.copy(introPlaneHelper).addScaledVector(introAxisU, -introPlaneHelper.dot(introAxisU));
+      }
+      introAxisV.normalize();
+      camera.position.copy(introAxisU).multiplyScalar(introStartRadius);
       camera.lookAt(0, 0, 0);
       controls = new OrbitControls(camera, renderer.domElement);
       controls.minDistance = 0.2;
-      controls.maxDistance = 100000.0;
+      controls.maxDistance = 5000000.0;
       controls.enableKeys = false;
       controls.enablePan = false;
       controls.addEventListener("change", render);
+      controls.enabled = false;
+      AnimationRunner.play(ANIMATION.INTRO);
 
       Minimap.init(document.getElementById("minimap"), document.getElementById("minimap-coords"));
 
       var raycaster = new THREE.Raycaster(),
         mouse = new THREE.Vector2();
-      raycaster.params.Line.threshold = 0.05;
+      raycaster.params.Line.threshold = 0.2;
       window.addEventListener("pointerup", onDocumentMouseUp, false);
       window.addEventListener("pointerdown", onDocumentMouseDown, false);
       window.addEventListener("mousemove", onSphereHover, false);
@@ -354,7 +385,11 @@
       var densityMapGroup = null, densityMapRequest = null, preDensityMapChildren = null, preDensityMapClickable = null;
       var preDensityMapCameraFar = null;
       var densityMapMesh = null, hoveredDensityInstanceId = -1;
-      var DENSITY_MODE_CAMERA_FAR = 500000.0;
+      var densityClusterMarkers = [], hoveredDensityClusterMarker = null;
+      var DENSITY_CLUSTER_MARKER_RADIUS_LY = 20.0;
+      var DENSITY_CLUSTER_MARKER_OPACITY = 0.5, DENSITY_CLUSTER_MARKER_HOVER_OPACITY = 0.9;
+      var DENSITY_CLUSTER_MARKER_HOVER_SCALE = 1.3;
+      var DENSITY_MODE_CAMERA_FAR = 5000000.0;
       var DENSITY_ZOOM_OUT_LY = 5000.0, DENSITY_ZOOM_IN_LY = 5.0;
       var densityZoomStartDist = 0, densityZoomEndDist = 0, densityZoomDir = null, densityZoomOnComplete = null;
       var densityZoomStartTarget = new THREE.Vector3(), densityZoomEndTarget = new THREE.Vector3();
@@ -383,6 +418,30 @@
         }
       }
 
+      function buildDensityClusterMarkers() {
+        if (densityClusterMarkers.length > 0 || clusters.length === 0) return;
+        var geometry = new THREE.SphereGeometry(DENSITY_CLUSTER_MARKER_RADIUS_LY, 12, 8);
+        for (var cluster of clusters) {
+          var material = new THREE.MeshBasicMaterial({
+            color: white,
+            transparent: true,
+            opacity: DENSITY_CLUSTER_MARKER_OPACITY,
+            depthWrite: false,
+          });
+          var marker = new THREE.Mesh(geometry, material);
+          marker.position.copy(cluster.position);
+          marker.userData.clusterPosition = cluster.position.clone();
+          marker.userData.clusterName = cluster.name;
+          densityMapGroup.add(marker);
+          densityClusterMarkers.push(marker);
+        }
+      }
+
+      function setClusterMarkerHighlighted(marker, on) {
+        marker.material.opacity = on ? DENSITY_CLUSTER_MARKER_HOVER_OPACITY : DENSITY_CLUSTER_MARKER_OPACITY;
+        marker.scale.setScalar(on ? DENSITY_CLUSTER_MARKER_HOVER_SCALE : 1);
+      }
+
       function restoreSceneAfterDensityMode() {
         scene.remove(densityMapGroup);
         for (var child of preDensityMapChildren) scene.add(child);
@@ -394,6 +453,10 @@
           camera.updateProjectionMatrix();
           preDensityMapCameraFar = null;
         }
+        updateScene(controls.target, true);
+        updateScene(controls.target, false);
+        refreshStarVisuals();
+        fetchNearbyStars(controls.target);
       }
 
       async function toggleDensityMap(value) {
@@ -404,6 +467,11 @@
             if (hoveredDensityInstanceId !== -1) {
               clearDensityHighlight(densityMapMesh, hoveredDensityInstanceId);
               hoveredDensityInstanceId = -1;
+            }
+            if (hoveredDensityClusterMarker) {
+              setClusterMarkerHighlighted(hoveredDensityClusterMarker, false);
+              hoveredDensityClusterMarker = null;
+              showStarName("");
             }
             startDensityZoom(DENSITY_ZOOM_IN_LY, restoreSceneAfterDensityMode);
           }
@@ -429,7 +497,8 @@
         }
         await densityMapRequest;
         if (!densityMapGroup || !params.showDensity || preDensityMapChildren) return;
-        preDensityMapChildren = scene.children.filter((c) => c !== milkyWay);
+        buildDensityClusterMarkers();
+        preDensityMapChildren = scene.children.filter((c) => c !== milkyWay && c !== andromeda);
         for (var child of preDensityMapChildren) scene.remove(child);
         preDensityMapClickable = clickableObjects.slice();
         clickableObjects.length = 0;
@@ -446,8 +515,8 @@
         const params = "x=" + x + "&y=" + y + "&z=" + z;
         try {
           const [bufferRes, dictRes] = await Promise.all([
-            fetch("/api/stars/nearest?" + params),
-            fetch("/api/dictionaries/nearest?" + params),
+            trackedFetch("/api/stars/nearest?" + params),
+            trackedFetch("/api/dictionaries/nearest?" + params),
           ]);
           if (bufferRes.status === 404 || dictRes.status === 404) return null;
           if (!bufferRes.ok || !dictRes.ok) {
@@ -472,9 +541,15 @@
           clearDensityHighlight(densityMapMesh, hoveredDensityInstanceId);
           hoveredDensityInstanceId = -1;
         }
+        if (hoveredDensityClusterMarker) {
+          setClusterMarkerHighlighted(hoveredDensityClusterMarker, false);
+          hoveredDensityClusterMarker = null;
+          showStarName("");
+        }
         var starPromise = fetchNearestStar(center.x, center.y, center.z);
         params.showDensity = false;
         showDensityCtrl.updateDisplay();
+        densityBandsCtrl.style.display = "none";
 
         startDensityZoom(DENSITY_ZOOM_IN_LY, function () {
           restoreSceneAfterDensityMode();
@@ -618,8 +693,8 @@
         const params = "name=" + encodeURIComponent(name);
         try {
           const [bufferRes, dictRes] = await Promise.all([
-            fetch("/api/stars/search?" + params),
-            fetch("/api/dictionaries/search?" + params),
+            trackedFetch("/api/stars/search?" + params),
+            trackedFetch("/api/dictionaries/search?" + params),
           ]);
           if (bufferRes.status === 404 || dictRes.status === 404) return null;
           if (!bufferRes.ok || !dictRes.ok) {
@@ -702,6 +777,9 @@
       createNebula(scene, starCatalog);
       milkyWay = buildMilkyWayGroup();
       scene.add(milkyWay);
+      andromeda = buildAndromedaGroup();
+      scene.add(andromeda);
+      hoverNameOnlyObjects.push(andromeda.userData.hoverTarget);
       StarAgent.init({ controls: controls, stars: starCatalog, names: starNames, search: searchStarOnServer });
       StarAgent.setNavigator(function(simbadId) {
         var star = starCatalog.findByName(simbadId);
@@ -818,7 +896,7 @@
           return;
         }
         raycaster.setFromCamera(mouse, camera);
-        var intersects = raycaster.intersectObjects(clickableObjects);
+        var intersects = raycaster.intersectObjects(clickableObjects.concat(hoverNameOnlyObjects));
         if (intersects.length === 0) {
           var nearest = findNearestStarByScreenPos(mouse, 3);
           if (nearest) intersects = [{ object: nearest}];
@@ -836,6 +914,21 @@
       function updateDensityHover() {
         if (!densityMapMesh) return;
         raycaster.setFromCamera(mouse, camera);
+        var clusterHits = raycaster.intersectObjects(densityClusterMarkers);
+        var clusterHit = clusterHits.length > 0 ? clusterHits[0].object : null;
+        if (clusterHit !== hoveredDensityClusterMarker) {
+          if (hoveredDensityClusterMarker) setClusterMarkerHighlighted(hoveredDensityClusterMarker, false);
+          hoveredDensityClusterMarker = clusterHit;
+          if (hoveredDensityClusterMarker) setClusterMarkerHighlighted(hoveredDensityClusterMarker, true);
+          showStarName(hoveredDensityClusterMarker ? hoveredDensityClusterMarker.userData.clusterName : "");
+        }
+        if (hoveredDensityClusterMarker) {
+          if (hoveredDensityInstanceId !== -1) {
+            clearDensityHighlight(densityMapMesh, hoveredDensityInstanceId);
+            hoveredDensityInstanceId = -1;
+          }
+          return;
+        }
         var hits = raycaster.intersectObject(densityMapMesh);
         var id = hits.length > 0 ? hits[0].instanceId : -1;
         // Ignore cells whose colour band is filtered out (still raycast-hit).
@@ -990,7 +1083,9 @@
         if (Math.abs(mouseDownX - event.clientX) > 5 || Math.abs(mouseDownY - event.clientY) > 5) return;
 
         if (params.showDensity) {
-          if (hoveredDensityInstanceId !== -1 && densityMapMesh) {
+          if (hoveredDensityClusterMarker) {
+            flyToNearestStarAt(hoveredDensityClusterMarker.userData.clusterPosition);
+          } else if (hoveredDensityInstanceId !== -1 && densityMapMesh) {
             flyToNearestStarAt(getDensityCellCenter(densityMapMesh, hoveredDensityInstanceId));
           }
           return;
@@ -1215,8 +1310,8 @@
           "x=" + position.x + "&y=" + position.y + "&z=" + position.z + "&radiusLy=" + radiusLy;
         try {
           const [buffer, dictionaries] = await Promise.all([
-            fetch("/api/stars/nearby?" + params).then((res) => res.arrayBuffer()),
-            fetch("/api/dictionaries/nearby?" + params).then((res) => res.json()),
+            trackedFetch("/api/stars/nearby?" + params).then((res) => res.arrayBuffer()),
+            trackedFetch("/api/dictionaries/nearby?" + params).then((res) => res.json()),
           ]);
           starCatalog.addBatch(buffer, dictionaries);
           updateScene(position, true);
@@ -1229,10 +1324,9 @@
       function fetchStarsAlongPath(startPos, endPos) {
         const totalDistance = startPos.distanceTo(endPos);
         const direction = endPos.clone().sub(startPos).normalize();
-        const waypointRadius = visibleDistance / 2;
-        for (let d = visibleDistance; d < totalDistance; d += visibleDistance) {
+        for (let d = WAYPOINT_STEP_LY; d < totalDistance; d += WAYPOINT_STEP_LY) {
           const waypoint = startPos.clone().addScaledVector(direction, d);
-          fetchNearbyStars(waypoint, waypointRadius);
+          fetchNearbyStars(waypoint, WAYPOINT_STEP_LY);
         }
       }
 
@@ -1532,7 +1626,7 @@
               var data = line.split("|");
               var coord = data[1].split(" "),
                 conLabel = createLabel(data[0], 0.4, controls.target, lightGray);
-              conLabel.position.setFromSphericalCoords(30, coord[0], coord[1]);
+              conLabel.position.setFromSphericalCoords(35, coord[0], coord[1]);
               for (let child of conLabel.children) {
                 child.geometry.translate(-conLabel.textCenter.x, -conLabel.textCenter.y, 0);
               }
@@ -1601,6 +1695,20 @@
         materials.forEach(function (mat) { mat.dispose(); });
       }
       
+      function tickIntro() {
+        var t = Math.min(AnimationRunner.step / introAnimationSteps, 1);
+        var ease = (1 - Math.cos(Math.PI * t)) / 2;
+        var angle = ease * Math.PI * 2;
+        var radius = introStartRadius + (introEndRadius - introStartRadius) * ease;
+        camera.position.copy(introAxisU).multiplyScalar(Math.cos(angle) * radius)
+          .addScaledVector(introAxisV, Math.sin(angle) * radius);
+        camera.lookAt(0, 0, 0);
+        if (AnimationRunner.step >= introAnimationSteps) {
+          AnimationRunner.stop();
+          controls.enabled = true;
+        }
+      }
+
       function tickRecenter() {
         var t = AnimationRunner.step / animationSteps;
         var ease = (1 - Math.cos(Math.PI * t)) / 2;
