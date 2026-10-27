@@ -20,18 +20,34 @@ const SPUR_STRENGTH = 0.9;
 const BAR_LENGTH_LY = 6000.0; // half-length, along local +X (a stylized reference axis — the real bar sits at ~25deg to the Sun-center line, not reproduced here)
 const BAR_WIDTH_LY = 1500.0; // half-width
 const BAR_STRENGTH = 1.1;
-const BAR_COLOR = 0xffe0a0;
+const BAR_COLOR = 0xfff6d6;
 const BULGE_FLATTEN = 0.55; // z-axis squash relative to the disk plane
 const BULGE_SCALE_LY = 2000.0; // gaussian sigma, not a hard edge
 const BULGE_STRENGTH = 1.3;
+const BULGE_BRIGHTNESS = 3.6; // HDR multiplier on bulge color (>1 overbrightens via additive blending) — independent of GALAXY_OPACITY, which caps everything
 const CORE_SCALE_LY = 400.0; // tight, bright pinpoint at the very center
 const CORE_STRENGTH = 4.0;
+const CORE_BRIGHTNESS = 4.5; // HDR multiplier on core color, same idea as BULGE_BRIGHTNESS but stronger
+const ARM_BRIGHTNESS = 2.4; // HDR multiplier on arm color, same mechanism
 const NOISE_FREQ = 0.00035; // ~1/(2900ly) — clumpy dust-lane-ish texture scale
 const NOISE_AMOUNT = 0.35;
 const DISK_COLOR = 0xbba36a; // diffuse disk — older, yellower population
 const ARM_COLOR = 0xc7b878;
-const BULGE_COLOR = 0xffcc88;
-const CORE_COLOR = 0xfff3d6;
+const BULGE_COLOR = 0xfff6d6;
+const CORE_COLOR = 0xfff6d6;
+const DUST_SCALE_HEIGHT_LY = 500.0; // thin — notably thinner than the stellar disk's DISK_SCALE_HEIGHT_LY
+const DUST_SCALE_LENGTH_LY = 40000.0; // radial extent of the dust layer
+const DUST_PATCH_FREQ = 0.006; // very low frequency (~14000 ly wavelength) — bigger than any single cloud clump
+const DUST_PATCH_CONTRAST = 3.5; // higher = bigger dust-free gaps between the dust-rich regions
+const DUST_FREQ = 0.003; // cloud/clump scale — finer and patchier than NOISE_FREQ
+const DUST_WARP_FREQ = 0.01; // scale of the turbulence field that displaces cloud samples — lower = bigger, slower swirls
+const DUST_WARP_AMOUNT_LY = 400.0; // how far (ly) the warp displaces the sample — bigger = more twisted/chaotic shapes, but also more prone to shimmer under ray-march undersampling
+const DUST_DETAIL_FREQ = 0.01; // finer noise layered on top of the base clump shape, for torn/ragged edges
+const DUST_DETAIL_AMOUNT = 0.6; // how strongly the detail layer roughens the coverage threshold (notches/holes at the edges)
+const DUST_COVERAGE = 0.15; // noise threshold — higher means less of the plane is covered in dust
+const DUST_FEATHER = 0.3; // softness of the cloud edges — lower = crisper but flickers more under camera movement (ray-march undersampling of the threshold)
+const DUST_STRENGTH = 0.85; // how strongly a fully-covered cloud blocks light behind it (0 = none, 1 = opaque)
+const DUST_COLOR = 0x693919;
 const DENSITY_MULTIPLIER = 0.0005;
 const GALAXY_OPACITY = 0.2; // master brightness dimmer — final alpha *= this, shape/balance untouched
 const RAYMARCH_STEPS = 44; // perf/quality knob — dense regions (bulge/core) exit early via the alpha>0.95 break anyway
@@ -65,6 +81,18 @@ uniform float uBulgeScale;
 uniform float uBulgeStrength;
 uniform float uCoreScale;
 uniform float uCoreStrength;
+uniform float uDustScaleHeight;
+uniform float uDustScaleLength;
+uniform float uDustPatchFreq;
+uniform float uDustPatchContrast;
+uniform float uDustFreq;
+uniform float uDustWarpFreq;
+uniform float uDustWarpAmount;
+uniform float uDustDetailFreq;
+uniform float uDustDetailAmount;
+uniform float uDustCoverage;
+uniform float uDustFeather;
+uniform float uDustStrength;
 uniform float uNoiseFreq;
 uniform float uNoiseAmount;
 uniform vec3  uDiskColor;
@@ -72,6 +100,7 @@ uniform vec3  uArmColor;
 uniform vec3  uBarColor;
 uniform vec3  uBulgeColor;
 uniform vec3  uCoreColor;
+uniform vec3  uDustColor;
 uniform float uDensity;
 uniform float uOpacity;
 
@@ -143,14 +172,33 @@ vec4 sampleGalaxy(vec3 p) {
   float bulge = uBulgeStrength * exp(-rb2 / (2.0 * uBulgeScale * uBulgeScale));
   float core  = uCoreStrength  * exp(-rb2 / (2.0 * uCoreScale  * uCoreScale));
 
+  float dustVertical = exp(-abs(h) / uDustScaleHeight);
+  float dust = 0.0;
+  if (dustVertical > 0.02) {
+    float dustEnvelope = exp(-rCyl / uDustScaleLength);
+    float dustPatch = mwNoise(p * uDustPatchFreq + vec3(61.0, 8.0, 140.0));
+    float dustPatchMul = pow(clamp(dustPatch, 0.0, 1.0), uDustPatchContrast) * (uDustPatchContrast + 1.0);
+    vec3 dustWarp = vec3(
+      mwNoise(p * uDustWarpFreq + vec3(5.2, 1.3, 9.4)),
+      mwNoise(p * uDustWarpFreq + vec3(47.1, 0.7, 23.0)),
+      mwNoise(p * uDustWarpFreq + vec3(91.8, 14.2, 2.6))
+    ) - 0.5;
+    vec3 pDust = p + dustWarp * uDustWarpAmount;
+    float dustNoise = mwFbm(pDust * uDustFreq + vec3(19.7, 4.1, 71.3));
+    float dustDetail = mwNoise(pDust * uDustDetailFreq + vec3(33.1, 58.0, 2.2)) - 0.5;
+    float dustShape = dustNoise + uDustDetailAmount * dustDetail;
+    float dustCoverage = smoothstep(uDustCoverage - uDustFeather, uDustCoverage + uDustFeather, dustShape);
+    dust = uDustStrength * dustVertical * dustEnvelope * dustCoverage * dustPatchMul;
+  }
+
   float noiseMul = mix(1.0 - uNoiseAmount, 1.0 + uNoiseAmount, n);
 
-  float total = (disk + bar + bulge + core) * noiseMul;
+  float total = (disk + bar + bulge + core + dust) * noiseMul;
   if (total < 0.0001) return vec4(0.0);
 
-  float weightSum = max(disk + bar + bulge + core, 0.0001);
+  float weightSum = max(disk + bar + bulge + core + dust, 0.0001);
   vec3 diskColor = mix(uDiskColor, uArmColor, clamp(arms * armMask, 0.0, 1.0));
-  vec3 color = (diskColor * disk + uBarColor * bar + uBulgeColor * bulge + uCoreColor * core) / weightSum;
+  vec3 color = (diskColor * disk + uBarColor * bar + uBulgeColor * bulge + uCoreColor * core + uDustColor * dust) / weightSum;
 
   return vec4(color, total);
 }
@@ -208,13 +256,26 @@ function buildGalaxyVolume() {
       uBulgeStrength: { value: BULGE_STRENGTH },
       uCoreScale: { value: CORE_SCALE_LY },
       uCoreStrength: { value: CORE_STRENGTH },
+      uDustScaleHeight: { value: DUST_SCALE_HEIGHT_LY },
+      uDustScaleLength: { value: DUST_SCALE_LENGTH_LY },
+      uDustPatchFreq: { value: DUST_PATCH_FREQ },
+      uDustPatchContrast: { value: DUST_PATCH_CONTRAST },
+      uDustFreq: { value: DUST_FREQ },
+      uDustWarpFreq: { value: DUST_WARP_FREQ },
+      uDustWarpAmount: { value: DUST_WARP_AMOUNT_LY },
+      uDustDetailFreq: { value: DUST_DETAIL_FREQ },
+      uDustDetailAmount: { value: DUST_DETAIL_AMOUNT },
+      uDustCoverage: { value: DUST_COVERAGE },
+      uDustFeather: { value: DUST_FEATHER },
+      uDustStrength: { value: DUST_STRENGTH },
       uNoiseFreq: { value: NOISE_FREQ },
       uNoiseAmount: { value: NOISE_AMOUNT },
       uDiskColor: { value: new THREE.Color(DISK_COLOR) },
-      uArmColor: { value: new THREE.Color(ARM_COLOR) },
+      uArmColor: { value: new THREE.Color(ARM_COLOR).multiplyScalar(ARM_BRIGHTNESS) },
       uBarColor: { value: new THREE.Color(BAR_COLOR) },
-      uBulgeColor: { value: new THREE.Color(BULGE_COLOR) },
-      uCoreColor: { value: new THREE.Color(CORE_COLOR) },
+      uBulgeColor: { value: new THREE.Color(BULGE_COLOR).multiplyScalar(BULGE_BRIGHTNESS) },
+      uCoreColor: { value: new THREE.Color(CORE_COLOR).multiplyScalar(CORE_BRIGHTNESS) },
+      uDustColor: { value: new THREE.Color(DUST_COLOR) },
       uDensity: { value: DENSITY_MULTIPLIER },
       uOpacity: { value: GALAXY_OPACITY },
     },

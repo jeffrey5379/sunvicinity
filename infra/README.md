@@ -35,7 +35,7 @@ terraform init          # first time only
 terraform apply         # ~30s to create; instance then boots for ~4-6 min
 ```
 
-Open the `app_url` output (`http://<public-ip>/sunvicinity/`). First boot
+Open the `app_url` output (`http://<public-ip>/`). First boot
 installs Node + Caddy, clones the repo, downloads the DB, runs `npm ci` and
 `vite build`, so the URL 404s/refuses until that finishes
 

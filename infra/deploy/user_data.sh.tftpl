@@ -10,6 +10,8 @@ DB_BUCKET="${db_bucket}"
 DB_KEY="${db_key}"
 REPO_URL="${repo_url}"
 REPO_BRANCH="${repo_branch}"
+DOMAIN_NAME="${domain_name}"
+SITE_ADDRESS="$${DOMAIN_NAME:-:80}"
 
 # --- packages ---------------------------------------------------------------
 # gcc-c++/make/python3: only used if better-sqlite3 has no prebuilt binary
@@ -46,25 +48,24 @@ npm run build   # -> dist/ (needs devDependencies, hence plain `npm ci`)
 chown -R sunvicinity:sunvicinity "$APP_DIR"
 
 # --- reverse proxy ------------------------------------------------------------
-# vite builds with base "/sunvicinity/", so the static bundle lives under that
-# path; the client's fetch() calls are rooted at "/api". HTTP only — there's no
-# domain to get a cert for. Add TLS later by pointing a name here and switching
-# the site address to that name (Caddy then provisions a cert automatically).
+# vite builds with base "/", so the static bundle is served at the site root;
+# the client's fetch() calls are rooted at "/api". When DOMAIN_NAME is set,
+# Caddy's site address becomes that domain and it provisions a Let's
+# Encrypt cert automatically (HTTPS + HTTP->HTTPS redirect); with no domain
+# it falls back to plain ":80".
 mkdir -p /etc/caddy
-cat > /etc/caddy/Caddyfile <<'EOF'
-:80 {
+cat > /etc/caddy/Caddyfile <<EOF
+$SITE_ADDRESS {
 	encode gzip
 
 	handle /api/* {
 		reverse_proxy 127.0.0.1:3001
 	}
 
-	handle_path /sunvicinity/* {
+	handle {
 		root * /opt/sunvicinity/dist
 		file_server
 	}
-
-	redir / /sunvicinity/ permanent
 }
 EOF
 

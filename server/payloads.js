@@ -53,7 +53,7 @@ const COMMON_CLASSES = ["F", "G", "K", "M"];
 const MAIN_RTREE_COMMON_CLASSES = COMMON_CLASSES.filter((c) => c !== F_RTREE_SPECTRAL_CLASS);
 const KNOWN_CLASS_LETTERS = [...RARE_SPECTRAL_CLASSES, ...COMMON_CLASSES];
 
-const MAX_LUM_MULT = 2.0; // Ia supergiants — see utils.js's lumClassMult/giantBrightnessMult
+const MAX_LUM_MULT = 2.0;
 
 function classBaseGlowMaxDist(letter, config) {
   const entry = config[letter];

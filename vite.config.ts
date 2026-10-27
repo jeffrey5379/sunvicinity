@@ -1,8 +1,7 @@
 import { defineConfig } from 'vite';
 import { copyFileSync, cpSync } from 'fs';
 
-export default defineConfig(({ command }) => ({
-  base: command === 'build' ? '/sunvicinity/' : '/',
+export default defineConfig({
   build: {
     target: 'esnext',
   },
@@ -20,4 +19,4 @@ export default defineConfig(({ command }) => ({
       },
     },
   ],
-}));
+});
