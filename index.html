@@ -1698,7 +1698,7 @@
       function tickIntro() {
         var t = Math.min(AnimationRunner.step / introAnimationSteps, 1);
         var ease = (1 - Math.cos(Math.PI * t)) / 2;
-        var angle = ease * Math.PI * 2;
+        var angle = ease * Math.PI;
         var radius = introStartRadius + (introEndRadius - introStartRadius) * ease;
         camera.position.copy(introAxisU).multiplyScalar(Math.cos(angle) * radius)
           .addScaledVector(introAxisV, Math.sin(angle) * radius);
