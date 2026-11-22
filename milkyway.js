@@ -24,16 +24,16 @@ const BAR_COLOR = 0xfff6d6;
 const BULGE_FLATTEN = 0.55; // z-axis squash relative to the disk plane
 const BULGE_SCALE_LY = 2000.0; // gaussian sigma, not a hard edge
 const BULGE_STRENGTH = 1.3;
-const BULGE_BRIGHTNESS = 3.6; // HDR multiplier on bulge color (>1 overbrightens via additive blending) — independent of GALAXY_OPACITY, which caps everything
-const CORE_SCALE_LY = 400.0; // tight, bright pinpoint at the very center
-const CORE_STRENGTH = 4.0;
-const CORE_BRIGHTNESS = 4.5; // HDR multiplier on core color, same idea as BULGE_BRIGHTNESS but stronger
-const ARM_BRIGHTNESS = 2.4; // HDR multiplier on arm color, same mechanism
+const BULGE_BRIGHTNESS = 5.0; // HDR multiplier on bulge color (>1 overbrightens via additive blending) — independent of GALAXY_OPACITY, which caps everything
+const CORE_SCALE_LY = 1200.0; // tight, bright pinpoint at the very center
+const CORE_STRENGTH = 8.0;
+const CORE_BRIGHTNESS = 8.5; // HDR multiplier on core color, same idea as BULGE_BRIGHTNESS but stronger
+const ARM_BRIGHTNESS = 1.8; // HDR multiplier on arm color, same mechanism
 const NOISE_FREQ = 0.00035; // ~1/(2900ly) — clumpy dust-lane-ish texture scale
 const NOISE_AMOUNT = 0.35;
-const DISK_COLOR = 0xbba36a; // diffuse disk — older, yellower population
-const ARM_COLOR = 0xc7b878;
-const BULGE_COLOR = 0xfff6d6;
+const DISK_COLOR = 0x9c1111;
+const ARM_COLOR = 0xa9c7c5;
+const BULGE_COLOR = 0xd6fdff;
 const CORE_COLOR = 0xfff6d6;
 const DUST_SCALE_HEIGHT_LY = 500.0; // thin — notably thinner than the stellar disk's DISK_SCALE_HEIGHT_LY
 const DUST_SCALE_LENGTH_LY = 40000.0; // radial extent of the dust layer
@@ -46,11 +46,11 @@ const DUST_DETAIL_FREQ = 0.01; // finer noise layered on top of the base clump s
 const DUST_DETAIL_AMOUNT = 0.6; // how strongly the detail layer roughens the coverage threshold (notches/holes at the edges)
 const DUST_COVERAGE = 0.15; // noise threshold — higher means less of the plane is covered in dust
 const DUST_FEATHER = 0.3; // softness of the cloud edges — lower = crisper but flickers more under camera movement (ray-march undersampling of the threshold)
-const DUST_STRENGTH = 0.85; // how strongly a fully-covered cloud blocks light behind it (0 = none, 1 = opaque)
+const DUST_STRENGTH = 0.95; // how strongly a fully-covered cloud blocks light behind it (0 = none, 1 = opaque)
 const DUST_COLOR = 0x693919;
 const DENSITY_MULTIPLIER = 0.0005;
 const GALAXY_OPACITY = 0.2; // master brightness dimmer — final alpha *= this, shape/balance untouched
-const RAYMARCH_STEPS = 44; // perf/quality knob — dense regions (bulge/core) exit early via the alpha>0.95 break anyway
+const RAYMARCH_STEPS = 34; // perf/quality knob — dense regions (bulge/core) exit early via the alpha>0.95 break anyway
 
 const VERT = `
 varying vec3 vLocalPos;
